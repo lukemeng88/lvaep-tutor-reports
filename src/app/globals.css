@@ -112,3 +112,29 @@
     display: none !important;
   }
 }
+
+/* Print: the staff record fits on one letter page in portrait. */
+@media print {
+  @page {
+    size: letter portrait;
+    margin: 0.35in;
+  }
+  html,
+  body {
+    background: #fff !important;
+  }
+  body {
+    font-size: 10px;
+  }
+  main {
+    max-width: none !important;
+    padding: 0 !important;
+  }
+  #record-form {
+    break-inside: avoid;
+  }
+  a {
+    text-decoration: none;
+    color: inherit;
+  }
+}

@@ -7,16 +7,11 @@ import type { Student } from "@/lib/supabase/database.types";
 import { formatLongDate } from "@/lib/format";
 import { StopStudentDialog } from "@/components/students/stop-student-dialog";
 import { ReactivateStudentDialog } from "@/components/students/reactivate-student-dialog";
+import { SubmitReportButton } from "@/components/reports/submit-report-button";
 import { InlineEditField } from "./inline-edit-field";
 import { SaveIndicator } from "./save-indicator";
 
-export function StudentHeader({
-  student,
-  submitAction,
-}: {
-  student: Student;
-  submitAction?: React.ReactNode;
-}) {
+export function StudentHeader({ student }: { student: Student }) {
   const { status, track, markError } = useSaveStatus();
   const [stopOpen, setStopOpen] = useState(false);
   const [reactivateOpen, setReactivateOpen] = useState(false);
@@ -81,7 +76,7 @@ export function StudentHeader({
           </div>
         </div>
         <div className="flex shrink-0 flex-wrap gap-2">
-          {submitAction}
+          <SubmitReportButton studentId={student.id} studentName={student.full_name} />
           {student.is_stopped ? (
             <Button variant="outline" onClick={() => setReactivateOpen(true)}>
               Reactivate

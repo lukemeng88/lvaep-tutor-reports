@@ -9,16 +9,9 @@ import type { StudentWithStats } from "@/lib/data/students";
 import { StudentFormDialog } from "./student-form-dialog";
 import { StopStudentDialog } from "./stop-student-dialog";
 import { ReactivateStudentDialog } from "./reactivate-student-dialog";
+import { SubmitReportButton } from "@/components/reports/submit-report-button";
 
-export function StudentCard({
-  student,
-  today,
-  submitAction,
-}: {
-  student: StudentWithStats;
-  today: string;
-  submitAction?: React.ReactNode;
-}) {
+export function StudentCard({ student, today }: { student: StudentWithStats; today: string }) {
   const [editOpen, setEditOpen] = useState(false);
   const [stopOpen, setStopOpen] = useState(false);
   const [reactivateOpen, setReactivateOpen] = useState(false);
@@ -81,7 +74,7 @@ export function StudentCard({
           <Button variant="outline" size="sm" onClick={() => setEditOpen(true)}>
             Edit
           </Button>
-          {submitAction}
+          <SubmitReportButton studentId={student.id} studentName={student.full_name} size="sm" variant="outline" />
           {stopped ? (
             <Button variant="outline" size="sm" onClick={() => setReactivateOpen(true)}>
               Reactivate

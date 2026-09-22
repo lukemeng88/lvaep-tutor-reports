@@ -37,13 +37,13 @@ declare
   rule_id uuid;
   n integer;
 
-  -- (student, weekday 0=Sun..6=Sat, hours)
+  -- (student, weekday 0=Sun..6=Sat, start and end; hours are end minus start)
   schedule constant jsonb := '[
-    {"student": "aaaaaaaa-0001-4aaa-8aaa-aaaaaaaaaaaa", "tutor": "22222222-2222-4222-8222-222222222222", "weekday": 1, "hours": 1.5},
-    {"student": "aaaaaaaa-0001-4aaa-8aaa-aaaaaaaaaaaa", "tutor": "22222222-2222-4222-8222-222222222222", "weekday": 3, "hours": 1.5},
-    {"student": "aaaaaaaa-0002-4aaa-8aaa-aaaaaaaaaaaa", "tutor": "22222222-2222-4222-8222-222222222222", "weekday": 2, "hours": 1.0},
-    {"student": "aaaaaaaa-0004-4aaa-8aaa-aaaaaaaaaaaa", "tutor": "33333333-3333-4333-8333-333333333333", "weekday": 4, "hours": 2.0},
-    {"student": "aaaaaaaa-0005-4aaa-8aaa-aaaaaaaaaaaa", "tutor": "33333333-3333-4333-8333-333333333333", "weekday": 6, "hours": 1.25}
+    {"student": "aaaaaaaa-0001-4aaa-8aaa-aaaaaaaaaaaa", "tutor": "22222222-2222-4222-8222-222222222222", "weekday": 1, "start_time": "10:00", "end_time": "11:30"},
+    {"student": "aaaaaaaa-0001-4aaa-8aaa-aaaaaaaaaaaa", "tutor": "22222222-2222-4222-8222-222222222222", "weekday": 3, "start_time": "10:00", "end_time": "11:30"},
+    {"student": "aaaaaaaa-0002-4aaa-8aaa-aaaaaaaaaaaa", "tutor": "22222222-2222-4222-8222-222222222222", "weekday": 2, "start_time": "18:00", "end_time": "19:00"},
+    {"student": "aaaaaaaa-0004-4aaa-8aaa-aaaaaaaaaaaa", "tutor": "33333333-3333-4333-8333-333333333333", "weekday": 4, "start_time": "16:00", "end_time": "18:00"},
+    {"student": "aaaaaaaa-0005-4aaa-8aaa-aaaaaaaaaaaa", "tutor": "33333333-3333-4333-8333-333333333333", "weekday": 6, "start_time": "11:00", "end_time": "12:15"}
   ]'::jsonb;
 begin
   -- Start clean. Cascades remove profiles, students, sessions, goals and reports.
@@ -72,56 +72,59 @@ begin
   from auth.users u
   where u.id in (staff_id, tutor1_id, tutor2_id);
 
-  -- Students.
-  insert into public.students (id, tutor_id, full_name, tutoring_site, default_days, default_times, is_stopped, stopped_reason, stopped_at) values
-    (rosa_id,   tutor1_id, 'Rosa Mendes',  'Bloomfield Public Library', 'Mon, Wed', '10:00 to 11:30 am', false, null, null),
-    (ahmed_id,  tutor1_id, 'Ahmed Khan',   'Montclair Public Library', 'Tue', '6:00 to 7:00 pm', false, null, null),
-    (li_id,     tutor1_id, 'Li Wei',       'Bloomfield Public Library', 'Sat', '9:00 to 10:30 am', true, 'Moved out of the area and no longer able to meet.', today - 21),
-    (fatima_id, tutor2_id, 'Fatima Noor',  'Bloomfield Public Library', 'Thu', '4:00 to 6:00 pm', false, null, null),
-    (carlos_id, tutor2_id, 'Carlos Ruiz',  'Nutley Public Library', 'Sat', '11:00 am to 12:15 pm', false, null, null);
+  -- Students. Days and times are not typed on a student any more: the
+  -- form's Day(s) and Time(s) come from the schedules and sessions below.
+  insert into public.students (id, tutor_id, full_name, tutoring_site, is_stopped, stopped_reason, stopped_at) values
+    (rosa_id,   tutor1_id, 'Rosa Mendes',  'Bloomfield Public Library', false, null, null),
+    (ahmed_id,  tutor1_id, 'Ahmed Khan',   'Montclair Public Library', false, null, null),
+    (li_id,     tutor1_id, 'Li Wei',       'Bloomfield Public Library', true, 'Moved out of the area and no longer able to meet.', today - 21),
+    (fatima_id, tutor2_id, 'Fatima Noor',  'Bloomfield Public Library', false, null, null),
+    (carlos_id, tutor2_id, 'Carlos Ruiz',  'Nutley Public Library', false, null, null);
 
   -- Recurring schedules, materialized through the end of the fiscal year,
-  -- the same way the app does it.
-  for r in select * from jsonb_to_recordset(schedule) as x(student uuid, tutor uuid, weekday integer, hours numeric)
+  -- the same way the app does it: every day gets the schedule's start and
+  -- end, and hours are the difference in quarter hours.
+  for r in select * from jsonb_to_recordset(schedule) as x(student uuid, tutor uuid, weekday integer, start_time time, end_time time)
   loop
     -- first matching weekday on or after seed_start
     d := seed_start + ((r.weekday - extract(dow from seed_start)::integer + 7) % 7);
 
-    insert into public.recurrence_rules (student_id, tutor_id, weekday, start_date, default_hours)
-    values (r.student, r.tutor, r.weekday, d, r.hours)
+    insert into public.recurrence_rules (student_id, tutor_id, weekday, start_date, default_hours, start_time, end_time)
+    values (r.student, r.tutor, r.weekday, d, round(extract(epoch from (r.end_time - r.start_time)) / 900) / 4, r.start_time, r.end_time)
     returning id into rule_id;
 
     while d <= fy_end loop
-      insert into public.sessions (student_id, tutor_id, session_date, hours, code, recurrence_rule_id)
-      values (r.student, r.tutor, d, r.hours, null, rule_id)
+      insert into public.sessions (student_id, tutor_id, session_date, hours, code, recurrence_rule_id, start_time, end_time)
+      values (r.student, r.tutor, d, round(extract(epoch from (r.end_time - r.start_time)) / 900) / 4, null, rule_id, r.start_time, r.end_time)
       on conflict (student_id, session_date) do nothing;
       d := d + 7;
     end loop;
   end loop;
 
-  -- A few realistic edits: absences, a holiday and a longer session.
-  update public.sessions set hours = 0, code = 'SA'
+  -- A few realistic edits: absences, a holiday and a longer session. Coded
+  -- days have no times; a longer day keeps its start and ends later.
+  update public.sessions set hours = 0, code = 'SA', start_time = null, end_time = null
     where student_id = rosa_id and session_date = (select min(session_date) from public.sessions where student_id = rosa_id and session_date >= seed_start + 7);
-  update public.sessions set hours = 0, code = 'TA'
+  update public.sessions set hours = 0, code = 'TA', start_time = null, end_time = null
     where student_id = rosa_id and session_date = (select min(session_date) from public.sessions where student_id = rosa_id and session_date >= seed_start + 21);
-  update public.sessions set hours = 0, code = 'H'
+  update public.sessions set hours = 0, code = 'H', start_time = null, end_time = null
     where student_id = ahmed_id and session_date = (select min(session_date) from public.sessions where student_id = ahmed_id and session_date >= seed_start + 14);
-  update public.sessions set hours = 2.5
+  update public.sessions set hours = 2.5, start_time = '10:00', end_time = '12:30'
     where student_id = rosa_id and session_date = (select max(session_date) from public.sessions where student_id = rosa_id and session_date <= today);
-  update public.sessions set hours = 0, code = 'SA'
+  update public.sessions set hours = 0, code = 'SA', start_time = null, end_time = null
     where student_id = fatima_id and session_date = (select min(session_date) from public.sessions where student_id = fatima_id and session_date >= seed_start + 7);
 
   -- One extra session outside the schedule.
-  insert into public.sessions (student_id, tutor_id, session_date, hours, notes)
-  values (ahmed_id, tutor1_id, greatest(seed_start, today - 10), 0.75, 'Extra practice before the citizenship interview.')
-  on conflict (student_id, session_date) do update set hours = 0.75, code = null;
+  insert into public.sessions (student_id, tutor_id, session_date, hours, start_time, end_time, notes)
+  values (ahmed_id, tutor1_id, greatest(seed_start, today - 10), 0.75, '17:00', '17:45', 'Extra practice before the citizenship interview.')
+  on conflict (student_id, session_date) do update set hours = 0.75, code = null, start_time = '17:00', end_time = '17:45';
 
   -- The stopped student has a little history and no active schedule.
   n := 0;
   d := seed_start + ((6 - extract(dow from seed_start)::integer + 7) % 7);
   while d <= today - 21 and n < 6 loop
-    insert into public.sessions (student_id, tutor_id, session_date, hours)
-    values (li_id, tutor1_id, d, 1.5)
+    insert into public.sessions (student_id, tutor_id, session_date, hours, start_time, end_time)
+    values (li_id, tutor1_id, d, 1.5, '09:00', '10:30')
     on conflict do nothing;
     d := d + 7;
     n := n + 1;

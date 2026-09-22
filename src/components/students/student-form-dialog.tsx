@@ -20,8 +20,8 @@ type Props = {
   onOpenChange: (open: boolean) => void;
 };
 
-// Adds a new student. Once a student exists, their name, site, days and
-// times are edited in place in the header of their page.
+// Adds a new student. Once a student exists, their name and site are edited
+// in place in the header of their page; days and times come from sessions.
 export function StudentFormDialog({ open, onOpenChange }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
@@ -32,8 +32,6 @@ export function StudentFormDialog({ open, onOpenChange }: Props) {
     const fields: StudentFields = {
       fullName: String(form.get("fullName") ?? ""),
       tutoringSite: String(form.get("tutoringSite") ?? ""),
-      defaultDays: String(form.get("defaultDays") ?? ""),
-      defaultTimes: String(form.get("defaultTimes") ?? ""),
     };
     setError(null);
     startTransition(async () => {
@@ -73,24 +71,6 @@ export function StudentFormDialog({ open, onOpenChange }: Props) {
                 placeholder="Bloomfield Public Library"
                 required
               />
-            </div>
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="space-y-1.5">
-                <Label htmlFor="student-defaultDays">Usual days (optional)</Label>
-                <Input
-                  id="student-defaultDays"
-                  name="defaultDays"
-                  placeholder="Mon, Wed"
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="student-defaultTimes">Usual times (optional)</Label>
-                <Input
-                  id="student-defaultTimes"
-                  name="defaultTimes"
-                  placeholder="10:00 to 11:30 am"
-                />
-              </div>
             </div>
             {error ? (
               <p role="alert" className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">

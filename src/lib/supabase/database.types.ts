@@ -36,6 +36,9 @@ type RecurrenceRuleRow = {
   start_date: string;
   end_date: string | null;
   default_hours: number;
+  /** "HH:MM:SS" as Postgres returns a time, or null. */
+  start_time: string | null;
+  end_time: string | null;
   created_at: string;
 };
 
@@ -48,6 +51,9 @@ type SessionRow = {
   code: SessionCode | null;
   recurrence_rule_id: string | null;
   notes: string | null;
+  /** "HH:MM:SS" as Postgres returns a time, or null on coded and older rows. */
+  start_time: string | null;
+  end_time: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -105,7 +111,7 @@ export type Database = {
       };
       recurrence_rules: {
         Row: RecurrenceRuleRow;
-        Insert: WithDefaults<RecurrenceRuleRow, "id" | "end_date" | "default_hours" | "created_at">;
+        Insert: WithDefaults<RecurrenceRuleRow, "id" | "end_date" | "default_hours" | "start_time" | "end_time" | "created_at">;
         Update: Partial<RecurrenceRuleRow>;
         Relationships: [];
       };
@@ -113,7 +119,7 @@ export type Database = {
         Row: SessionRow;
         Insert: WithDefaults<
           SessionRow,
-          "id" | "hours" | "code" | "recurrence_rule_id" | "notes" | "created_at" | "updated_at"
+          "id" | "hours" | "code" | "recurrence_rule_id" | "notes" | "start_time" | "end_time" | "created_at" | "updated_at"
         >;
         Update: Partial<SessionRow>;
         Relationships: [];
@@ -152,11 +158,20 @@ export type Database = {
           p_end_date: string;
           p_hours: number;
           p_dates: string[];
+          p_start_time?: string | null;
+          p_end_time?: string | null;
         };
         Returns: string;
       };
       update_recurring_sessions_from: {
-        Args: { p_rule_id: string; p_from_date: string; p_hours: number; p_code: string | null };
+        Args: {
+          p_rule_id: string;
+          p_from_date: string;
+          p_hours: number;
+          p_code: string | null;
+          p_start_time?: string | null;
+          p_end_time?: string | null;
+        };
         Returns: number;
       };
       delete_recurring_sessions_from: {

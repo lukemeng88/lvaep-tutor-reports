@@ -56,11 +56,14 @@ test("tutor records a weekly session and submits a report; staff sees it in the 
   await page.click("[role=dialog] button[type=submit]:has-text('Add student')");
   await expect(page.locator(`a:has-text("${studentName}")`)).toBeVisible();
 
-  // Opens the student and adds a weekly session starting on the 1st of this month.
+  // Opens the student and adds a weekly session starting on the 1st of this
+  // month, 10:00 to 11:30, which the popover shows as 1.5 hours.
   await page.click(`a:has-text("${studentName}")`);
   await page.waitForURL((u) => u.pathname.startsWith("/students/"));
   await page.click(`button[data-iso="${firstOfMonth}"]`);
-  await page.fill("#session-hours", "1.5");
+  await page.fill("#session-start", "10:00");
+  await page.fill("#session-end", "11:30");
+  await expect(page.getByTestId("session-hours")).toHaveText("1.5 hours");
   await page.check("input[type=checkbox]");
   await page.click("button[type=submit]:has-text('Add')");
   await expect(page.getByText(/Added \d+ weekly session/)).toBeVisible();

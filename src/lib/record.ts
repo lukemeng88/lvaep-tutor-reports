@@ -2,8 +2,9 @@ import { fiscalYearMonths } from "@/lib/fiscal-year";
 import { roundHours, type HoursSession } from "@/lib/hours";
 import type { ReportSnapshot } from "@/lib/reports";
 import type { SessionCode } from "@/lib/supabase/database.types";
+import { toHHMM } from "@/lib/times";
 
-export type GridCell = { hours: number; code: SessionCode | null } | null;
+export type GridCell = { hours: number; code: SessionCode | null; start_time: string | null; end_time: string | null } | null;
 
 export type SubmittedMonth = {
   reportId: string;
@@ -54,7 +55,7 @@ export function assembleYearGrid(input: {
         if (!s.session_date.startsWith(prefix)) continue;
         const day = Number(s.session_date.slice(8, 10));
         const hours = s.code ? 0 : Number(s.hours) || 0;
-        cells[day - 1] = { hours, code: s.code };
+        cells[day - 1] = { hours, code: s.code, start_time: s.code ? null : toHHMM(s.start_time), end_time: s.code ? null : toHHMM(s.end_time) };
         total += hours;
       }
       return { month, year, source: "live", version: null, submittedAt: null, cells, total: roundHours(total) };
@@ -68,7 +69,7 @@ export function assembleYearGrid(input: {
       if (!s.date.startsWith(prefix)) continue;
       const day = Number(s.date.slice(8, 10));
       const hours = s.code ? 0 : Number(s.hours) || 0;
-      cells[day - 1] = { hours, code: s.code };
+      cells[day - 1] = { hours, code: s.code, start_time: s.start_time, end_time: s.end_time };
       total += hours;
     }
     return {
@@ -121,7 +122,7 @@ export function gridToCsv(
   grid: YearGrid,
   meta: { studentName: string; tutorName: string },
 ): string {
-  const rows: string[][] = [["date", "student", "tutor", "hours", "code", "source"]];
+  const rows: string[][] = [["date", "student", "tutor", "start_time", "end_time", "hours", "code", "source"]];
   for (const column of grid.columns) {
     const source =
       column.source === "submitted"
@@ -132,7 +133,7 @@ export function gridToCsv(
     column.cells.forEach((cell, index) => {
       if (!cell) return;
       const date = `${column.year}-${String(column.month).padStart(2, "0")}-${String(index + 1).padStart(2, "0")}`;
-      rows.push([date, meta.studentName, meta.tutorName, String(cell.hours), cell.code ?? "", source]);
+      rows.push([date, meta.studentName, meta.tutorName, cell.start_time ?? "", cell.end_time ?? "", String(cell.hours), cell.code ?? "", source]);
     });
   }
   const escape = (v: string) => (/[",\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v);

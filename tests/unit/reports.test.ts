@@ -51,19 +51,19 @@ describe("buildSnapshot", () => {
     student: {
       full_name: "Rosa Mendes",
       tutoring_site: "Bloomfield Public Library",
-      default_days: "Mon, Wed",
-      default_times: "10 to 11:30",
       is_stopped: false,
       stopped_reason: null,
     },
+    days: "Mon, Wed",
+    times: "10:00 am to 11:30 am",
     fiscalYear: 2026,
     month: 1, // January 2027
     sessions: [
-      { session_date: "2026-12-30", hours: 2, code: null },
-      { session_date: "2027-01-04", hours: 1.5, code: null },
-      { session_date: "2027-01-06", hours: 0, code: "TA" as const },
-      { session_date: "2027-01-13", hours: 0.75, code: null },
-      { session_date: "2027-02-01", hours: 3, code: null },
+      { session_date: "2026-12-30", hours: 2, code: null, start_time: "10:00:00", end_time: "12:00:00" },
+      { session_date: "2027-01-04", hours: 1.5, code: null, start_time: "10:00:00", end_time: "11:30:00" },
+      { session_date: "2027-01-06", hours: 0, code: "TA" as const, start_time: null, end_time: null },
+      { session_date: "2027-01-13", hours: 0.75, code: null, start_time: "10:00:00", end_time: "10:45:00" },
+      { session_date: "2027-02-01", hours: 3, code: null, start_time: "09:00:00", end_time: "12:00:00" },
     ],
     goals: [{ goal_id: "A1", attained: true, attained_on: "2027-01-10", other_text: null }],
   };
@@ -72,7 +72,10 @@ describe("buildSnapshot", () => {
     const snapshot = buildSnapshot(input);
     expect(snapshot.sessions.map((s) => s.date)).toEqual(["2027-01-04", "2027-01-06", "2027-01-13"]);
     expect(snapshot.total_hours).toBe(2.25);
-    expect(snapshot.sessions[1]).toEqual({ date: "2027-01-06", hours: 0, code: "TA" });
+    expect(snapshot.sessions[0]).toEqual({ date: "2027-01-04", hours: 1.5, code: null, start_time: "10:00", end_time: "11:30" });
+    expect(snapshot.sessions[1]).toEqual({ date: "2027-01-06", hours: 0, code: "TA", start_time: null, end_time: null });
+    expect(snapshot.days).toBe("Mon, Wed");
+    expect(snapshot.times).toBe("10:00 am to 11:30 am");
     expect(snapshot.fiscal_year).toBe(2026);
     expect(snapshot.month).toBe(1);
     expect(snapshot.goals).toEqual(input.goals);
@@ -82,6 +85,20 @@ describe("buildSnapshot", () => {
     const snapshot = buildSnapshot(input);
     expect(parseSnapshot(JSON.parse(JSON.stringify(snapshot)))).toEqual(snapshot);
     expect(parseSnapshot({ nope: true })).toBeNull();
+  });
+
+  it("reads snapshots written before session times existed", () => {
+    const legacy = {
+      student_name: "Rosa Mendes",
+      month: 1,
+      default_days: "Mon",
+      default_times: "10 to 11",
+      sessions: [{ date: "2027-01-04", hours: 1.5, code: null }],
+    };
+    const parsed = parseSnapshot(legacy);
+    expect(parsed?.days).toBe("Mon");
+    expect(parsed?.times).toBe("10 to 11");
+    expect(parsed?.sessions[0]).toEqual({ date: "2027-01-04", hours: 1.5, code: null, start_time: null, end_time: null });
   });
 });
 

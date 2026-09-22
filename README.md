@@ -87,9 +87,9 @@ Import the repository, add the two `NEXT_PUBLIC_SUPABASE_*` environment variable
 
 ### Tutors
 
-- **Home** (`/home`): total hours card (this month, this fiscal year, all time), active students with hours this month and fiscal year, goals attained and the next session, a greyed out "Stopped students" section with reasons and a Reactivate action. Add, edit, submit report and mark as stopped from each row.
+- **Home** (`/home`): total hours card (this month, this fiscal year, all time), active students with hours this month and fiscal year, goals attained and the next session, a greyed out "Stopped students" section with reasons and a Reactivate action. Add a student (name and site), open a student to edit, submit a report and mark as stopped from each row.
 - **Student detail** (`/students/[id]`): header fields save inline as you type. Two tabs, both auto saving with a small Saved indicator and a revert plus toast on failure.
-  - **Tutoring days**: a month calendar scoped to the fiscal year (July to June) with a fiscal year selector for past years. Click an empty day to add hours (0.25 steps, max 12) and optionally repeat weekly to the end of the fiscal year. Click a session to change hours, set a code (Tutor absent, Student absent, Holiday) or delete it; sessions that belong to a weekly schedule ask "This day only" or "This and future days". Hours show in blue, TA in orange, SA in yellow, H in gray; today is outlined. Arrow keys move between days and the editor becomes a bottom sheet on phones.
+  - **Tutoring days**: a month calendar scoped to the fiscal year (July to June) with a fiscal year selector for past years. Click an empty day to enter a start and end time in 15 minute steps; the hours are the difference, shown live, and a session can optionally repeat weekly to the end of the fiscal year with the same times. Click a session to change its times, set a code (Tutor absent, Student absent, Holiday) or delete it; sessions that belong to a weekly schedule ask "This day only" or "This and future days". Hours show in blue, TA in orange, SA in yellow, H in gray; today is outlined. Arrow keys move between days and the editor becomes a bottom sheet on phones.
   - **Goals**: one collapsible section per category with "n of m attained", a checkbox and a date per goal, and a free text field for "Other(s)". Wording and asterisks are copied from the form.
 - **Hours** (`/hours`): a bar chart of hours per month, a table of hours per student per month and a running total, with a fiscal year selector.
 - **Submit report**: pick a month (each shows "Submitted (vN)" or "Not submitted" and how many days it has), validation lists exactly what is missing with a link to fix it, then a confirmation step. Each submission stores a JSON snapshot with a new version number. Live data stays editable.
@@ -162,8 +162,8 @@ erDiagram
     uuid tutor_id FK
     text full_name
     text tutoring_site
-    text default_days
-    text default_times
+    text default_days "unused, kept"
+    text default_times "unused, kept"
     bool is_stopped
     text stopped_reason
     timestamptz stopped_at
@@ -174,11 +174,15 @@ erDiagram
     date start_date
     date end_date "defaults to fiscal year end"
     numeric default_hours
+    time start_time
+    time end_time
   }
   sessions {
     uuid id PK
     date session_date
-    numeric hours "0-12, quarter steps"
+    time start_time "15 minute steps, null on coded days"
+    time end_time "after start, at most 12 hours later"
+    numeric hours "end minus start, quarter steps"
     text code "TA | SA | H | null"
     uuid recurrence_rule_id FK
   }
@@ -205,7 +209,7 @@ erDiagram
   }
 ```
 
-Key constraints: `sessions` is unique per `(student_id, session_date)`, `hours` must be between 0 and 12 in 0.25 steps, and `code is null or hours = 0` so a coded day always has 0 hours. `monthly_reports` is unique per `(student_id, fiscal_year, month, version)`. `fiscal_year_of(date)` in SQL and `fiscalYearOf()` in TypeScript agree: July to December belong to that year's fiscal year, January to June to the previous year's.
+Key constraints: `sessions` is unique per `(student_id, session_date)`, `hours` must be between 0 and 12 in 0.25 steps, and `code is null or hours = 0` so a coded day always has 0 hours. `start_time` and `end_time` are set together, on 15 minute steps, with the end after the start; `hours` is always written as end minus start so every total, report and snapshot reads it unchanged. `students.default_days` and `students.default_times` remain in the table but nothing reads them: the form's Day(s) are the weekdays of the student's active weekly schedules and Time(s) the start and end most of the fiscal year's sessions share. `monthly_reports` is unique per `(student_id, fiscal_year, month, version)`. `fiscal_year_of(date)` in SQL and `fiscalYearOf()` in TypeScript agree: July to December belong to that year's fiscal year, January to June to the previous year's.
 
 ### Row Level Security
 
@@ -232,9 +236,10 @@ The calendar's weekly materialization and "this and future days" edits run insid
 - A weekly schedule writes a session for every matching weekday through the end of the fiscal year, using the default hours. Hour totals on the home card, the hours page and the calendar strip therefore count only sessions dated today or earlier, and the calendar shows the rest as "more planned". A report snapshot includes every session in the month, so the intended flow is to submit after the month ends (or delete days that did not happen first).
 - Report validation requires the student name, tutoring site, the tutor's name and at least one day with hours or a code in the month; a stopped student also needs a reason. Goals are never required.
 - The "missing reports" list means active students who had at least one session last month but no submission for that month. Students with no sessions at all are not chased.
-- Sessions can be entered for any day, past or future, including days outside the student's usual days.
-- One session per student per day. Two meetings on the same day are entered as one session with the combined hours.
-- Hours are stored with two decimals and validated to quarter hour steps both in the UI and in the database.
+- Sessions can be entered for any day, past or future.
+- One session per student per day. Two meetings on the same day are entered as one session spanning both.
+- A session is a start and an end time in 15 minute steps; hours are the difference, rounded to the nearest quarter, and a session cannot end at or before it starts or run longer than 12 hours. Coded days have no times. Hours are stored with two decimals and validated to quarter hour steps in the UI and in the database.
+- Nobody types "usual days" or "usual times" any more. The report's Day(s) box lists the weekdays of the student's active weekly schedules and Time(s) the most common start and end across the fiscal year's sessions; both are blank when there is no data, and each report snapshot keeps the values as they were at submission along with every session's start and end.
 - Deleting "this and future days" ends the weekly rule the day before; deleting the last remaining day of a rule one at a time removes the empty rule.
 - "Today" is computed on the server in the server's time zone (UTC on Vercel). Around midnight the tutor's local date and the server's date can differ by a few hours; this only affects which day is outlined and which sessions count as "so far".
 - Next.js 16 renamed middleware to `proxy.ts`. It does the same job: refresh the Supabase session cookie and redirect signed out users to `/login`, tutors away from `/staff`, and staff away from tutor pages. Pages and server actions check the role again, so access never depends on the proxy alone.

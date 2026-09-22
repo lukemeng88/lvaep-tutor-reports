@@ -158,6 +158,8 @@ export function CalendarTab({ studentId, sessions: serverSessions, today }: Prop
         code: submit.code,
         recurrence_rule_id: tempRule,
         notes: null,
+        start_time: submit.startTime,
+        end_time: submit.endTime,
       }));
       runOptimistic(
         [...sessions, ...additions],
@@ -165,8 +167,9 @@ export function CalendarTab({ studentId, sessions: serverSessions, today }: Prop
           addSession({
             studentId,
             date: iso,
-            hours: submit.hours,
             code: submit.code,
+            startTime: submit.startTime,
+            endTime: submit.endTime,
             repeatWeekly: submit.repeatWeekly,
           }),
         (data) =>
@@ -188,8 +191,17 @@ export function CalendarTab({ studentId, sessions: serverSessions, today }: Prop
         s.recurrence_rule_id === target.recurrence_rule_id &&
         s.session_date >= target.session_date);
     runOptimistic(
-      sessions.map((s) => (affects(s) ? { ...s, hours: submit.hours, code: submit.code } : s)),
-      () => updateSession({ sessionId: target.id, hours: submit.hours, code: submit.code, scope: submit.scope }),
+      sessions.map((s) =>
+        affects(s) ? { ...s, hours: submit.hours, code: submit.code, start_time: submit.startTime, end_time: submit.endTime } : s,
+      ),
+      () =>
+        updateSession({
+          sessionId: target.id,
+          code: submit.code,
+          startTime: submit.startTime,
+          endTime: submit.endTime,
+          scope: submit.scope,
+        }),
       (data) => (data.updated === 1 ? "Session updated." : `Updated ${data.updated} sessions.`),
     );
   }

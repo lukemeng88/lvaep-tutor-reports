@@ -51,24 +51,6 @@ export function StudentHeader({ student }: { student: Student }) {
               onSaving={track}
               onError={markError}
             />
-            <InlineEditField
-              studentId={student.id}
-              field="default_days"
-              label="Usual days"
-              value={student.default_days ?? ""}
-              placeholder="Add days"
-              onSaving={track}
-              onError={markError}
-            />
-            <InlineEditField
-              studentId={student.id}
-              field="default_times"
-              label="Usual times"
-              value={student.default_times ?? ""}
-              placeholder="Add times"
-              onSaving={track}
-              onError={markError}
-            />
           </div>
           <div className="mt-1 flex items-center gap-2 text-xs text-gray-500">
             <span>Click a field to edit. Changes save automatically.</span>

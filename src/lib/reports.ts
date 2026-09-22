@@ -2,17 +2,26 @@ import type { GoalState } from "@/lib/goals";
 import { calendarYearForMonth, fiscalYearOf } from "@/lib/fiscal-year";
 import { sumHours, type HoursSession } from "@/lib/hours";
 import type { SessionCode } from "@/lib/supabase/database.types";
+import { toHHMM } from "@/lib/times";
 
 // Snapshot stored in monthly_reports.snapshot. Staff views are built from it,
 // so it must carry everything the paper form shows.
-export type SnapshotSession = { date: string; hours: number; code: SessionCode | null };
+export type SnapshotSession = {
+  date: string;
+  hours: number;
+  code: SessionCode | null;
+  /** "HH:MM", or null on coded days and rows recorded before times existed. */
+  start_time: string | null;
+  end_time: string | null;
+};
 
 export type ReportSnapshot = {
   tutor_name: string;
   student_name: string;
   tutoring_site: string;
-  default_days: string | null;
-  default_times: string | null;
+  /** The form's Day(s) and Time(s) at submission: from the schedules and sessions, not typed. */
+  days: string | null;
+  times: string | null;
   fiscal_year: number;
   month: number;
   sessions: SnapshotSession[];
@@ -77,11 +86,13 @@ export type SnapshotInput = {
   student: {
     full_name: string;
     tutoring_site: string;
-    default_days: string | null;
-    default_times: string | null;
     is_stopped: boolean;
     stopped_reason: string | null;
   };
+  /** "Mon, Wed" from the active weekly schedules, or null. */
+  days: string | null;
+  /** "10:00 am to 11:30 am", the pair most sessions in the year share, or null. */
+  times: string | null;
   fiscalYear: number;
   month: number;
   sessions: HoursSession[];
@@ -99,14 +110,16 @@ export function buildSnapshot(input: SnapshotInput): ReportSnapshot {
     tutor_name: input.tutorName,
     student_name: input.student.full_name,
     tutoring_site: input.student.tutoring_site,
-    default_days: input.student.default_days,
-    default_times: input.student.default_times,
+    days: input.days,
+    times: input.times,
     fiscal_year: input.fiscalYear,
     month: input.month,
     sessions: monthSessions.map((s) => ({
       date: s.session_date,
       hours: s.code ? 0 : Number(s.hours),
       code: s.code,
+      start_time: s.code ? null : toHHMM(s.start_time),
+      end_time: s.code ? null : toHHMM(s.end_time),
     })),
     total_hours: sumHours(monthSessions),
     is_stopped: input.student.is_stopped,
@@ -148,8 +161,9 @@ export function parseSnapshot(value: unknown): ReportSnapshot | null {
     tutor_name: typeof v.tutor_name === "string" ? v.tutor_name : "",
     student_name: v.student_name,
     tutoring_site: typeof v.tutoring_site === "string" ? v.tutoring_site : "",
-    default_days: typeof v.default_days === "string" ? v.default_days : null,
-    default_times: typeof v.default_times === "string" ? v.default_times : null,
+    // Older snapshots carried the typed default_days and default_times.
+    days: typeof v.days === "string" ? v.days : typeof v.default_days === "string" ? v.default_days : null,
+    times: typeof v.times === "string" ? v.times : typeof v.default_times === "string" ? v.default_times : null,
     fiscal_year: typeof v.fiscal_year === "number" ? v.fiscal_year : 0,
     month: v.month,
     sessions: (v.sessions as unknown[]).flatMap((s) => {
@@ -157,7 +171,15 @@ export function parseSnapshot(value: unknown): ReportSnapshot | null {
       const r = s as Record<string, unknown>;
       if (typeof r.date !== "string") return [];
       const code = r.code === "TA" || r.code === "SA" || r.code === "H" ? r.code : null;
-      return [{ date: r.date, hours: Number(r.hours) || 0, code }];
+      return [
+        {
+          date: r.date,
+          hours: Number(r.hours) || 0,
+          code,
+          start_time: typeof r.start_time === "string" ? toHHMM(r.start_time) : null,
+          end_time: typeof r.end_time === "string" ? toHHMM(r.end_time) : null,
+        },
+      ];
     }),
     total_hours: Number(v.total_hours) || 0,
     is_stopped: v.is_stopped === true,

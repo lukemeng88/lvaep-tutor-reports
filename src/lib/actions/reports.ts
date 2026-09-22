@@ -5,6 +5,7 @@ import { z } from "zod";
 import { requireTutor } from "@/lib/auth/session";
 import { createClient } from "@/lib/supabase/server";
 import { fail, ok, type ActionResult } from "@/lib/actions/result";
+import { commonTimes, scheduleDays } from "@/lib/schedule";
 import { calendarYearForMonth, daysInMonth, fiscalYearEnd, fiscalYearMonths, fiscalYearOf, fiscalYearStart, todayISO } from "@/lib/fiscal-year";
 import { toGoalStates } from "@/lib/goals";
 import { buildSnapshot, defaultMonthToSubmit, validateReport, type MonthStatus, type ReportIssue } from "@/lib/reports";
@@ -89,13 +90,14 @@ type Loaded = {
     id: string;
     full_name: string;
     tutoring_site: string;
-    default_days: string | null;
-    default_times: string | null;
     is_stopped: boolean;
     stopped_reason: string | null;
   };
   tutorName: string;
-  monthSessions: { session_date: string; hours: number; code: "TA" | "SA" | "H" | null }[];
+  monthSessions: { session_date: string; hours: number; code: "TA" | "SA" | "H" | null; start_time: string | null; end_time: string | null }[];
+  /** The form's Day(s) and Time(s): active schedules, and the year's most common times. */
+  days: string | null;
+  times: string | null;
 };
 
 async function loadForReport(tutorId: string, tutorName: string, studentId: string, fiscalYear: number, month: number): Promise<Loaded | null> {
@@ -104,26 +106,36 @@ async function loadForReport(tutorId: string, tutorName: string, studentId: stri
   const prefix = `${year}-${String(month).padStart(2, "0")}`;
   const from = `${prefix}-01`;
   const to = `${prefix}-${String(daysInMonth(year, month)).padStart(2, "0")}`;
-  const [studentRes, sessionsRes] = await Promise.all([
+  const [studentRes, sessionsRes, yearSessionsRes, rulesRes] = await Promise.all([
     supabase
       .from("students")
-      .select("id, full_name, tutoring_site, default_days, default_times, is_stopped, stopped_reason")
+      .select("id, full_name, tutoring_site, is_stopped, stopped_reason")
       .eq("id", studentId)
       .eq("tutor_id", tutorId)
       .maybeSingle(),
     supabase
       .from("sessions")
-      .select("session_date, hours, code")
+      .select("session_date, hours, code, start_time, end_time")
       .eq("student_id", studentId)
       .eq("tutor_id", tutorId)
       .gte("session_date", from)
       .lte("session_date", to),
+    supabase
+      .from("sessions")
+      .select("start_time, end_time")
+      .eq("student_id", studentId)
+      .eq("tutor_id", tutorId)
+      .gte("session_date", fiscalYearStart(fiscalYear))
+      .lte("session_date", fiscalYearEnd(fiscalYear)),
+    supabase.from("recurrence_rules").select("weekday, start_date, end_date").eq("student_id", studentId),
   ]);
-  if (studentRes.error || sessionsRes.error || !studentRes.data) return null;
+  if (studentRes.error || sessionsRes.error || yearSessionsRes.error || rulesRes.error || !studentRes.data) return null;
   return {
     student: studentRes.data,
     tutorName,
     monthSessions: sessionsRes.data.map((s) => ({ ...s, hours: Number(s.hours) })),
+    days: scheduleDays(rulesRes.data, todayISO()),
+    times: commonTimes(yearSessionsRes.data),
   };
 }
 
@@ -189,6 +201,8 @@ export async function submitReport(input: SubmitReportInput): Promise<ActionResu
   const snapshot = buildSnapshot({
     tutorName: loaded.tutorName,
     student: loaded.student,
+    days: loaded.days,
+    times: loaded.times,
     fiscalYear,
     month,
     sessions: loaded.monthSessions,

@@ -4,7 +4,8 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { formatLongDate } from "@/lib/format";
-import { SESSION_CODES, normalizeHoursAndCode } from "@/lib/sessions";
+import { SESSION_CODES } from "@/lib/sessions";
+import { checkTimes, formatHoursLabel, hoursBetween, minutesToTime, parseTime, toHHMM } from "@/lib/times";
 import type { SessionCode } from "@/lib/supabase/database.types";
 import type { CalendarSession } from "@/lib/data/sessions";
 import { WEEKDAY_LONG } from "@/lib/calendar";
@@ -13,8 +14,8 @@ import { weekdayOf } from "@/lib/recurrence";
 export type Scope = "this" | "future";
 
 export type EditorSubmit =
-  | { kind: "add"; hours: number; code: SessionCode | null; repeatWeekly: boolean }
-  | { kind: "update"; hours: number; code: SessionCode | null; scope: Scope };
+  | { kind: "add"; hours: number; code: SessionCode | null; startTime: string | null; endTime: string | null; repeatWeekly: boolean }
+  | { kind: "update"; hours: number; code: SessionCode | null; startTime: string | null; endTime: string | null; scope: Scope };
 
 type Props = {
   iso: string;
@@ -25,55 +26,60 @@ type Props = {
   onClose: () => void;
 };
 
-// Shared form for the popover (desktop) and bottom sheet (mobile).
+const DEFAULT_START = "10:00";
+const DEFAULT_END = "11:00";
+
+/** Where the inputs start: the session's own times, or a pair that matches its hours for older rows without times. */
+function initialTimes(session: CalendarSession | null): { start: string; end: string } {
+  if (!session) return { start: DEFAULT_START, end: DEFAULT_END };
+  const start = toHHMM(session.start_time);
+  const end = toHHMM(session.end_time);
+  if (start && end) return { start, end };
+  if (session.hours > 0) return { start: DEFAULT_START, end: minutesToTime((parseTime(DEFAULT_START) ?? 0) + session.hours * 60) };
+  return { start: DEFAULT_START, end: DEFAULT_END };
+}
+
+// Shared form for the popover (desktop) and bottom sheet (mobile). Hours
+// are never typed: they are the end time minus the start time.
 export function SessionEditor({ iso, session, pending, onSubmit, onDelete, onClose }: Props) {
   const editing = session !== null;
   const recurring = Boolean(session?.recurrence_rule_id);
-  const [hours, setHours] = useState<number>(session ? session.hours : 1);
-  const [hoursText, setHoursText] = useState<string>(session ? String(session.hours) : "1");
+  const initial = initialTimes(session);
+  const [start, setStart] = useState(initial.start);
+  const [end, setEnd] = useState(initial.end);
   const [code, setCode] = useState<SessionCode | null>(session?.code ?? null);
   const [repeatWeekly, setRepeatWeekly] = useState(false);
   const [scope, setScope] = useState<Scope>("this");
   const [error, setError] = useState<string | null>(null);
 
   const weekday = WEEKDAY_LONG[weekdayOf(iso)];
-
-  function commitHours(text: string) {
-    setHoursText(text);
-    const value = Number(text);
-    if (text === "" || !Number.isFinite(value)) return;
-    const next = normalizeHoursAndCode(value, code, "hours");
-    setHours(next.hours);
-    setCode(next.code);
-  }
-
-  function changeCode(value: string) {
-    const nextCode = value === "" ? null : (value as SessionCode);
-    const next = normalizeHoursAndCode(hours, nextCode, "code");
-    setHours(next.hours);
-    setHoursText(String(next.hours));
-    setCode(next.code);
-  }
+  const timesProblem = code ? null : checkTimes(start, end);
+  const hours = code ? 0 : timesProblem ? null : hoursBetween(start, end);
 
   function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError(null);
-    const value = Number(hoursText);
-    if (!Number.isFinite(value) || value < 0 || value > 12 || Math.round(value * 4) !== value * 4) {
-      setError("Enter hours between 0 and 12 in steps of 0.25.");
+    if (code) {
+      const base = { hours: 0, code, startTime: null, endTime: null };
+      if (editing) onSubmit({ kind: "update", ...base, scope: recurring ? scope : "this" });
+      else onSubmit({ kind: "add", ...base, repeatWeekly });
       return;
     }
-    if (!editing && value === 0 && !code) {
-      setError("Enter the hours tutored, or choose an absence or holiday code.");
+    if (!start || !end) {
+      setError("Enter a start and end time, or choose an absence or holiday code.");
       return;
     }
-    const normalized = normalizeHoursAndCode(value, code, "hours");
-    if (editing) {
-      onSubmit({ kind: "update", hours: normalized.hours, code: normalized.code, scope: recurring ? scope : "this" });
-    } else {
-      onSubmit({ kind: "add", hours: normalized.hours, code: normalized.code, repeatWeekly });
+    if (timesProblem) {
+      setError(timesProblem);
+      return;
     }
+    const base = { hours: hours ?? 0, code: null, startTime: start, endTime: end };
+    if (editing) onSubmit({ kind: "update", ...base, scope: recurring ? scope : "this" });
+    else onSubmit({ kind: "add", ...base, repeatWeekly });
   }
+
+  const timeInput =
+    "h-8 w-full rounded-md border border-gray-300 px-2 text-sm text-gray-900 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30";
 
   return (
     <form onSubmit={submit} className="space-y-3" noValidate>
@@ -84,29 +90,34 @@ export function SessionEditor({ iso, session, pending, onSubmit, onDelete, onClo
         </p>
       </div>
 
-      <div className="grid grid-cols-2 gap-3">
-        <div className="space-y-1">
-          <Label htmlFor="session-hours">Hours</Label>
-          <input
-            id="session-hours"
-            type="number"
-            inputMode="decimal"
-            min={0}
-            max={12}
-            step={0.25}
-            value={hoursText}
-            onChange={(e) => commitHours(e.target.value)}
-            disabled={code !== null}
-            autoFocus
-            className="h-8 w-full rounded-md border border-gray-300 px-2 text-sm text-gray-900 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30 disabled:bg-gray-100 disabled:text-gray-400"
-          />
+      {code === null ? (
+        <div className="grid grid-cols-2 gap-3">
+          <div className="space-y-1">
+            <Label htmlFor="session-start">Start time</Label>
+            <input
+              id="session-start"
+              type="time"
+              step={900}
+              value={start}
+              onChange={(e) => setStart(e.target.value)}
+              autoFocus
+              className={timeInput}
+            />
+          </div>
+          <div className="space-y-1">
+            <Label htmlFor="session-end">End time</Label>
+            <input id="session-end" type="time" step={900} value={end} onChange={(e) => setEnd(e.target.value)} className={timeInput} />
+          </div>
         </div>
+      ) : null}
+
+      <div className="grid grid-cols-2 gap-3">
         <div className="space-y-1">
           <Label htmlFor="session-code">Code</Label>
           <select
             id="session-code"
             value={code ?? ""}
-            onChange={(e) => changeCode(e.target.value)}
+            onChange={(e) => setCode(e.target.value === "" ? null : (e.target.value as SessionCode))}
             className="h-8 w-full rounded-md border border-gray-300 bg-white px-2 text-sm text-gray-900 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30"
           >
             <option value="">None</option>
@@ -116,6 +127,12 @@ export function SessionEditor({ iso, session, pending, onSubmit, onDelete, onClo
               </option>
             ))}
           </select>
+        </div>
+        <div className="space-y-1">
+          <span className="text-sm font-medium text-gray-700">Hours</span>
+          <p data-testid="session-hours" aria-live="polite" className="h-8 leading-8 text-sm font-medium text-gray-900">
+            {code ? "0 hours" : hours !== null ? formatHoursLabel(hours) : <span className="font-normal text-gray-500">{timesProblem}</span>}
+          </p>
         </div>
       </div>
       {code ? (

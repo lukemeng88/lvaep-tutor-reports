@@ -6,7 +6,7 @@ import { useDebouncedCallback } from "@/hooks/use-debounced-callback";
 import { updateStudentField } from "@/lib/actions/students";
 import { cn } from "@/lib/utils";
 
-type Field = "full_name" | "tutoring_site" | "default_days" | "default_times";
+type Field = "full_name" | "tutoring_site";
 
 type Props = {
   studentId: string;

@@ -7,19 +7,11 @@ import { createClient } from "@/lib/supabase/server";
 import { fail, ok, type ActionResult } from "@/lib/actions/result";
 import type { Student } from "@/lib/supabase/database.types";
 
-const optionalText = z
-  .string()
-  .trim()
-  .max(200, "Keep this under 200 characters.")
-  .transform((v) => (v.length ? v : null))
-  .nullable()
-  .optional();
-
+// Days and times are no longer typed on a student: the form's Day(s) come
+// from the weekly schedules and Time(s) from the sessions themselves.
 const studentFieldsSchema = z.object({
   fullName: z.string().trim().min(1, "Enter the student's full name.").max(200),
   tutoringSite: z.string().trim().min(1, "Enter the tutoring site.").max(200),
-  defaultDays: optionalText,
-  defaultTimes: optionalText,
 });
 
 export type StudentFields = z.input<typeof studentFieldsSchema>;
@@ -44,8 +36,6 @@ export async function createStudent(input: StudentFields): Promise<ActionResult<
       tutor_id: user.id,
       full_name: parsed.data.fullName,
       tutoring_site: parsed.data.tutoringSite,
-      default_days: parsed.data.defaultDays ?? null,
-      default_times: parsed.data.defaultTimes ?? null,
     })
     .select("id")
     .single();
@@ -72,8 +62,6 @@ export async function updateStudent(
       {
         full_name: parsed.data.fullName,
         tutoring_site: parsed.data.tutoringSite,
-        default_days: parsed.data.defaultDays ?? null,
-        default_times: parsed.data.defaultTimes ?? null,
       },
       { count: "exact" },
     )
@@ -88,7 +76,7 @@ export async function updateStudent(
 
 // Inline edits from the student header: one field at a time.
 const inlineFieldSchema = z.object({
-  field: z.enum(["full_name", "tutoring_site", "default_days", "default_times"]),
+  field: z.enum(["full_name", "tutoring_site"]),
   value: z.string().trim().max(200),
 });
 
@@ -103,19 +91,12 @@ export async function updateStudentField(
   if (!parsed.success) return fail("That value is not valid.");
 
   const { field, value } = parsed.data;
-  const required = field === "full_name" || field === "tutoring_site";
-  if (required && !value) {
+  if (!value) {
     return fail(field === "full_name" ? "The student's name cannot be empty." : "The tutoring site cannot be empty.");
   }
 
-  const patch: Partial<Pick<Student, "full_name" | "tutoring_site" | "default_days" | "default_times">> =
-    field === "full_name"
-      ? { full_name: value }
-      : field === "tutoring_site"
-        ? { tutoring_site: value }
-        : field === "default_days"
-          ? { default_days: value || null }
-          : { default_times: value || null };
+  const patch: Partial<Pick<Student, "full_name" | "tutoring_site">> =
+    field === "full_name" ? { full_name: value } : { tutoring_site: value };
 
   const supabase = await createClient();
   const { error, count } = await supabase

@@ -6,36 +6,47 @@ import { requireTutor } from "@/lib/auth/session";
 import { createClient } from "@/lib/supabase/server";
 import { fail, ok, type ActionResult } from "@/lib/actions/result";
 import { planWeeklyRecurrence } from "@/lib/recurrence";
-import { isQuarterHours } from "@/lib/sessions";
+import { checkTimes, hoursBetween } from "@/lib/times";
 
 const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Enter a valid date.");
-const hoursSchema = z
-  .number()
-  .refine(isQuarterHours, "Hours must be between 0 and 12 in steps of 0.25.");
+const timeSchema = z.string().regex(/^\d{2}:\d{2}$/, "Enter a valid time.").nullable();
 const codeSchema = z.enum(["TA", "SA", "H"]).nullable();
 
-const addSessionSchema = z
-  .object({
-    studentId: z.string().uuid(),
-    date: isoDate,
-    hours: hoursSchema,
-    code: codeSchema.default(null),
-    repeatWeekly: z.boolean().default(false),
-  })
-  .refine((v) => v.code === null || v.hours === 0, "A day with an absence or holiday code has 0 hours.");
+// Hours are never taken from the client: a coded day is 0 hours with no
+// times, and any other day is end minus start, checked here again.
+const timedFields = {
+  code: codeSchema.default(null),
+  startTime: timeSchema.default(null),
+  endTime: timeSchema.default(null),
+};
+
+type Timed = { code: "TA" | "SA" | "H" | null; startTime: string | null; endTime: string | null };
+
+function resolveTimed(v: Timed): { ok: true; hours: number; code: Timed["code"]; startTime: string | null; endTime: string | null } | { ok: false; error: string } {
+  if (v.code) return { ok: true, hours: 0, code: v.code, startTime: null, endTime: null };
+  const problem = checkTimes(v.startTime, v.endTime);
+  if (problem) return { ok: false, error: problem };
+  const hours = hoursBetween(v.startTime, v.endTime) ?? 0;
+  if (hours <= 0) return { ok: false, error: "Enter a start and end time, or choose an absence or holiday code." };
+  return { ok: true, hours, code: null, startTime: v.startTime, endTime: v.endTime };
+}
+
+const addSessionSchema = z.object({
+  studentId: z.string().uuid(),
+  date: isoDate,
+  ...timedFields,
+  repeatWeekly: z.boolean().default(false),
+});
 
 export type AddSessionInput = z.input<typeof addSessionSchema>;
 
 const scopeSchema = z.enum(["this", "future"]);
 
-const updateSessionSchema = z
-  .object({
-    sessionId: z.string().uuid(),
-    hours: hoursSchema,
-    code: codeSchema,
-    scope: scopeSchema.default("this"),
-  })
-  .refine((v) => v.code === null || v.hours === 0, "A day with an absence or holiday code has 0 hours.");
+const updateSessionSchema = z.object({
+  sessionId: z.string().uuid(),
+  ...timedFields,
+  scope: scopeSchema.default("this"),
+});
 
 export type UpdateSessionInput = z.input<typeof updateSessionSchema>;
 
@@ -58,7 +69,10 @@ export async function addSession(input: AddSessionInput): Promise<ActionResult<A
   const user = await requireTutor();
   const parsed = addSessionSchema.safeParse(input);
   if (!parsed.success) return fail(parsed.error.issues[0]?.message ?? "Check the session details.");
-  const { studentId, date, hours, code, repeatWeekly } = parsed.data;
+  const { studentId, date, repeatWeekly } = parsed.data;
+  const timed = resolveTimed(parsed.data);
+  if (!timed.ok) return fail(timed.error);
+  const { hours, code, startTime, endTime } = timed;
 
   const supabase = await createClient();
 
@@ -69,6 +83,8 @@ export async function addSession(input: AddSessionInput): Promise<ActionResult<A
       session_date: date,
       hours,
       code,
+      start_time: startTime,
+      end_time: endTime,
     });
     if (error) {
       if (error.code === "23505") return fail("There is already a session on that day.");
@@ -95,6 +111,8 @@ export async function addSession(input: AddSessionInput): Promise<ActionResult<A
     p_end_date: plan.endDate,
     p_hours: hours,
     p_dates: plan.dates,
+    p_start_time: startTime,
+    p_end_time: endTime,
   });
   if (error) return fail("We could not add the weekly sessions. Please try again.");
 
@@ -118,7 +136,10 @@ export async function updateSession(input: UpdateSessionInput): Promise<ActionRe
   const user = await requireTutor();
   const parsed = updateSessionSchema.safeParse(input);
   if (!parsed.success) return fail(parsed.error.issues[0]?.message ?? "Check the session details.");
-  const { sessionId, hours, code, scope } = parsed.data;
+  const { sessionId, scope } = parsed.data;
+  const timed = resolveTimed(parsed.data);
+  if (!timed.ok) return fail(timed.error);
+  const { hours, code, startTime, endTime } = timed;
 
   const session = await loadOwnSession(sessionId, user.id);
   if (!session) return fail("That session could not be found.");
@@ -131,6 +152,8 @@ export async function updateSession(input: UpdateSessionInput): Promise<ActionRe
       p_from_date: session.session_date,
       p_hours: hours,
       p_code: code,
+      p_start_time: startTime,
+      p_end_time: endTime,
     });
     if (error) return fail("We could not update the sessions. Please try again.");
     revalidate(session.student_id);
@@ -139,7 +162,7 @@ export async function updateSession(input: UpdateSessionInput): Promise<ActionRe
 
   const { error } = await supabase
     .from("sessions")
-    .update({ hours, code })
+    .update({ hours, code, start_time: startTime, end_time: endTime })
     .eq("id", sessionId)
     .eq("tutor_id", user.id);
   if (error) return fail("We could not update the session. Please try again.");

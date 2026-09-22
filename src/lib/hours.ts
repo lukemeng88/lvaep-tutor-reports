@@ -1,11 +1,14 @@
 import { fiscalYearOf } from "@/lib/fiscal-year";
 import type { SessionCode } from "@/lib/supabase/database.types";
 
-// A minimal session shape shared by the tutor and staff views.
+// A minimal session shape shared by the tutor and staff views. Times are
+// present where the caller loaded them.
 export type HoursSession = {
   session_date: string;
   hours: number;
   code: SessionCode | null;
+  start_time?: string | null;
+  end_time?: string | null;
 };
 
 // Absence and holiday codes always count as zero hours.

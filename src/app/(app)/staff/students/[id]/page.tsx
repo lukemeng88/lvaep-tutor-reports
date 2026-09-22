@@ -13,6 +13,7 @@ import { formatDateTime, formatLongDate } from "@/lib/format";
 import { toGoalStates } from "@/lib/goals";
 import { FOOTER_NOTE, OFFICE } from "@/lib/office";
 import { assembleYearGrid, latestSnapshot, pickSubmittedMonths } from "@/lib/record";
+import { commonTimes, scheduleDays } from "@/lib/schedule";
 
 type Params = { id: string };
 type Query = { fy?: string; live?: string; version?: string };
@@ -51,14 +52,16 @@ export default async function StaffStudentPage({
   const latest = latestSnapshot(submittedByMonth);
   const pinned = pinnedId ? record.reports.find((r) => r.id === pinnedId) ?? null : null;
 
-  // Header, stopped status and goals: live data in live view, else the most recent snapshot.
+  // Header, stopped status and goals: live data in live view, else the most
+  // recent snapshot. Day(s) are the weekdays of the active weekly schedules
+  // and Time(s) the start and end most of the year's sessions share.
   const header = live || !latest
     ? {
         tutor: record.tutor.full_name,
         student: record.student.full_name,
         site: record.student.tutoring_site,
-        days: record.student.default_days,
-        times: record.student.default_times,
+        days: scheduleDays(record.rules, record.today),
+        times: commonTimes(record.liveSessions),
         stopped: record.student.is_stopped,
         stoppedReason: record.student.stopped_reason,
         goals: toGoalStates(record.definitions, record.liveGoals),
@@ -67,8 +70,8 @@ export default async function StaffStudentPage({
         tutor: latest.snapshot.tutor_name,
         student: latest.snapshot.student_name,
         site: latest.snapshot.tutoring_site,
-        days: latest.snapshot.default_days,
-        times: latest.snapshot.default_times,
+        days: latest.snapshot.days,
+        times: latest.snapshot.times,
         stopped: latest.snapshot.is_stopped,
         stoppedReason: latest.snapshot.stopped_reason,
         goals: latest.snapshot.goals,
@@ -147,11 +150,11 @@ export default async function StaffStudentPage({
             </div>
             <div className="print:col-span-2">
               <dt className="text-xs text-gray-500">Day(s)</dt>
-              <dd className="font-medium text-gray-900">{header.days || <span className="text-gray-400">Not set</span>}</dd>
+              <dd className="font-medium text-gray-900">{header.days || <span aria-label="No days">&nbsp;</span>}</dd>
             </div>
             <div className="print:col-span-3">
               <dt className="text-xs text-gray-500">Time(s)</dt>
-              <dd className="font-medium text-gray-900">{header.times || <span className="text-gray-400">Not set</span>}</dd>
+              <dd className="font-medium text-gray-900">{header.times || <span aria-label="No times">&nbsp;</span>}</dd>
             </div>
           </dl>
 

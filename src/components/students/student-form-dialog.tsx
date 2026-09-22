@@ -13,20 +13,18 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { createStudent, updateStudent, type StudentFields } from "@/lib/actions/students";
-import type { Student } from "@/lib/supabase/database.types";
+import { createStudent, type StudentFields } from "@/lib/actions/students";
 
 type Props = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  // When a student is given the dialog edits it; otherwise it adds a new one.
-  student?: Pick<Student, "id" | "full_name" | "tutoring_site" | "default_days" | "default_times">;
 };
 
-export function StudentFormDialog({ open, onOpenChange, student }: Props) {
+// Adds a new student. Once a student exists, their name, site, days and
+// times are edited in place in the header of their page.
+export function StudentFormDialog({ open, onOpenChange }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
-  const editing = Boolean(student);
 
   function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -39,12 +37,12 @@ export function StudentFormDialog({ open, onOpenChange, student }: Props) {
     };
     setError(null);
     startTransition(async () => {
-      const result = student ? await updateStudent(student.id, fields) : await createStudent(fields);
+      const result = await createStudent(fields);
       if (!result.ok) {
         setError(result.error);
         return;
       }
-      toast.success(student ? "Student updated." : "Student added.");
+      toast.success("Student added.");
       onOpenChange(false);
     });
   }
@@ -54,12 +52,8 @@ export function StudentFormDialog({ open, onOpenChange, student }: Props) {
       <DialogContent className="sm:max-w-md">
         <form onSubmit={handleSubmit} className="contents" noValidate>
           <DialogHeader>
-            <DialogTitle>{editing ? "Edit student" : "Add student"}</DialogTitle>
-            <DialogDescription>
-              {editing
-                ? "Update the student's details."
-                : "Add a learner you are tutoring. You can change these details later."}
-            </DialogDescription>
+            <DialogTitle>Add student</DialogTitle>
+            <DialogDescription>Add a learner you are tutoring. You can change these details later.</DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <div className="space-y-1.5">
@@ -67,7 +61,6 @@ export function StudentFormDialog({ open, onOpenChange, student }: Props) {
               <Input
                 id="student-fullName"
                 name="fullName"
-                defaultValue={student?.full_name ?? ""}
                 required
                 autoFocus
               />
@@ -77,7 +70,6 @@ export function StudentFormDialog({ open, onOpenChange, student }: Props) {
               <Input
                 id="student-tutoringSite"
                 name="tutoringSite"
-                defaultValue={student?.tutoring_site ?? ""}
                 placeholder="Bloomfield Public Library"
                 required
               />
@@ -88,7 +80,6 @@ export function StudentFormDialog({ open, onOpenChange, student }: Props) {
                 <Input
                   id="student-defaultDays"
                   name="defaultDays"
-                  defaultValue={student?.default_days ?? ""}
                   placeholder="Mon, Wed"
                 />
               </div>
@@ -97,7 +88,6 @@ export function StudentFormDialog({ open, onOpenChange, student }: Props) {
                 <Input
                   id="student-defaultTimes"
                   name="defaultTimes"
-                  defaultValue={student?.default_times ?? ""}
                   placeholder="10:00 to 11:30 am"
                 />
               </div>
@@ -113,7 +103,7 @@ export function StudentFormDialog({ open, onOpenChange, student }: Props) {
               Cancel
             </Button>
             <Button type="submit" disabled={pending}>
-              {pending ? "Saving" : editing ? "Save changes" : "Add student"}
+              {pending ? "Saving" : "Add student"}
             </Button>
           </DialogFooter>
         </form>

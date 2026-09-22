@@ -6,13 +6,11 @@ import { Button } from "@/components/ui/button";
 import { formatHours } from "@/lib/hours";
 import { formatLongDate } from "@/lib/format";
 import type { StudentWithStats } from "@/lib/data/students";
-import { StudentFormDialog } from "./student-form-dialog";
 import { StopStudentDialog } from "./stop-student-dialog";
 import { ReactivateStudentDialog } from "./reactivate-student-dialog";
 import { SubmitReportButton } from "@/components/reports/submit-report-button";
 
 export function StudentCard({ student, today }: { student: StudentWithStats; today: string }) {
-  const [editOpen, setEditOpen] = useState(false);
   const [stopOpen, setStopOpen] = useState(false);
   const [reactivateOpen, setReactivateOpen] = useState(false);
   const stopped = student.is_stopped;
@@ -68,10 +66,9 @@ export function StudentCard({ student, today }: { student: StudentWithStats; tod
               : "No upcoming session"}
         </p>
         <div className="flex flex-wrap gap-2">
+          {/* Edit opens the student's page, where the name, site, days and
+              times are edited in place in the header. */}
           <Button variant="outline" size="sm" nativeButton={false} render={<Link href={`/students/${student.id}`} />}>
-            Open
-          </Button>
-          <Button variant="outline" size="sm" onClick={() => setEditOpen(true)}>
             Edit
           </Button>
           <SubmitReportButton studentId={student.id} studentName={student.full_name} size="sm" variant="outline" />
@@ -87,7 +84,6 @@ export function StudentCard({ student, today }: { student: StudentWithStats; tod
         </div>
       </div>
 
-      <StudentFormDialog open={editOpen} onOpenChange={setEditOpen} student={student} />
       <StopStudentDialog
         open={stopOpen}
         onOpenChange={setStopOpen}

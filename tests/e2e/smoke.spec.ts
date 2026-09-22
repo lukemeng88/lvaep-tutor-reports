@@ -14,6 +14,7 @@ const studentName = `Smoke Student ${unique}`;
 const today = new Date();
 const monthPrefix = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}`;
 const firstOfMonth = `${monthPrefix}-01`;
+const secondOfMonth = `${monthPrefix}-02`;
 const monthName = today.toLocaleString("en-US", { month: "long" });
 
 async function signUp(page: Page, who: { name: string; email: string }, role: "tutor" | "staff") {
@@ -68,6 +69,16 @@ test("tutor records a weekly session and submits a report; staff sees it in the 
   await page.click("button[type=submit]:has-text('Add')");
   await expect(page.getByText(/Added \d+ weekly session/)).toBeVisible();
   await expect(page.locator(`button[data-iso="${firstOfMonth}"]`)).toContainText("1.5 h");
+
+  // Marks the 2nd as Student absent with the palette: pick the color, click
+  // the day, no popover, then Escape back to normal.
+  await page.click("button:has-text('SA: Student absent')");
+  await expect(page.getByRole("status")).toContainText("Click any day to mark it as Student absent");
+  await page.click(`button[data-iso="${secondOfMonth}"]`);
+  await expect(page.getByText(/Marked .* as Student absent/)).toBeVisible();
+  await expect(page.locator(`button[data-iso="${secondOfMonth}"]`)).toContainText("SA");
+  await page.keyboard.press("Escape");
+  await expect(page.locator("button:has-text('Hours tutored')")).toHaveAttribute("aria-pressed", "true");
 
   // Submits the report for this month.
   await page.click("header button:has-text('Submit report')");

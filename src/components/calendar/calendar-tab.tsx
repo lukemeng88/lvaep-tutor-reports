@@ -1,10 +1,10 @@
 "use client";
 
-import { useMemo, useRef, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { toast } from "sonner";
-import { ChevronLeftIcon, ChevronRightIcon } from "lucide-react";
+import { CheckIcon, ChevronLeftIcon, ChevronRightIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Popover, PopoverContent } from "@/components/ui/popover";
 import { useMediaQuery } from "@/hooks/use-media-query";
 import { addSession, deleteSession, updateSession } from "@/lib/actions/sessions";
@@ -22,7 +22,10 @@ import {
 } from "@/lib/fiscal-year";
 import { formatHours, isInFiscalYear, isInMonth, sumHours, upToToday } from "@/lib/hours";
 import { planWeeklyRecurrence } from "@/lib/recurrence";
-import { codeLabel } from "@/lib/sessions";
+import { codeLabel, SESSION_CODES } from "@/lib/sessions";
+import type { SessionCode } from "@/lib/supabase/database.types";
+import { formatLongDate } from "@/lib/format";
+import { formatHoursLabel } from "@/lib/times";
 import { cn } from "@/lib/utils";
 import { DeleteSessionDialog } from "./delete-session-dialog";
 import { SessionEditor, type EditorSubmit, type Scope } from "./session-editor";
@@ -40,6 +43,15 @@ const CHIP_STYLES: Record<"hours" | "TA" | "SA" | "H", string> = {
   H: "bg-[var(--session-h-bg)] text-[var(--session-h-fg)]",
 };
 
+// The legend doubles as a tool palette. "Hours tutored" is the normal mode,
+// where a day opens the popover; a code paints days with one click.
+type Mode = "hours" | SessionCode;
+
+const PALETTE: { mode: Mode; label: string }[] = [
+  { mode: "hours", label: "Hours tutored" },
+  ...SESSION_CODES.map((c) => ({ mode: c.value as Mode, label: `${c.short}: ${c.label}` })),
+];
+
 export function CalendarTab({ studentId, sessions: serverSessions, today }: Props) {
   const currentFiscalYear = fiscalYearOf(today);
   const todayMonth = Number(today.split("-")[1]);
@@ -51,6 +63,9 @@ export function CalendarTab({ studentId, sessions: serverSessions, today }: Prop
   const [selectedIso, setSelectedIso] = useState<string | null>(null);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [focusedIso, setFocusedIso] = useState<string | null>(null);
+  const [mode, setMode] = useState<Mode>("hours");
+  // A day with hours is not painted over silently: this holds the question.
+  const [replaceAsk, setReplaceAsk] = useState<{ iso: string; hours: number; code: SessionCode } | null>(null);
   const [pending, startTransition] = useTransition();
   const anchorRef = useRef<HTMLButtonElement | null>(null);
   const gridRef = useRef<HTMLDivElement | null>(null);
@@ -104,15 +119,79 @@ export function CalendarTab({ studentId, sessions: serverSessions, today }: Prop
     else goToMonth(fiscalYear, month === 12 ? 1 : month + 1);
   }
 
+  // Escape leaves a code mode. The mode also resets with the tab, since the
+  // component unmounts when the tutor navigates away.
+  useEffect(() => {
+    if (mode === "hours") return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setMode("hours");
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [mode]);
+
   function openDay(iso: string, element: HTMLButtonElement) {
     const existing = byDate.get(iso);
     if (existing && existing.id.startsWith("temp-")) {
       toast.info("That day is still saving. Try again in a moment.");
       return;
     }
-    anchorRef.current = element;
     setFocusedIso(iso);
+    if (mode !== "hours") {
+      paintDay(iso, mode, existing ?? null);
+      return;
+    }
+    anchorRef.current = element;
     setSelectedIso(iso);
+  }
+
+  /**
+   * One click in a code mode. The same code again clears the day (a coded
+   * row holds nothing else, so it is deleted); another code replaces it; a
+   * day with hours asks first; an empty day gets a new coded row.
+   */
+  function paintDay(iso: string, code: SessionCode, existing: CalendarSession | null) {
+    const label = codeLabel(code);
+    const when = formatLongDate(iso);
+    if (!existing) {
+      const addition: CalendarSession = {
+        id: `temp-${iso}`,
+        session_date: iso,
+        hours: 0,
+        code,
+        recurrence_rule_id: null,
+        notes: null,
+        start_time: null,
+        end_time: null,
+      };
+      runOptimistic(
+        [...sessions, addition],
+        () => addSession({ studentId, date: iso, code, startTime: null, endTime: null, repeatWeekly: false }),
+        () => `Marked ${when} as ${label}.`,
+      );
+      return;
+    }
+    if (existing.code === code) {
+      runOptimistic(
+        sessions.filter((s) => s.id !== existing.id),
+        () => deleteSession({ sessionId: existing.id, scope: "this" }),
+        () => `Cleared ${label} from ${when}.`,
+      );
+      return;
+    }
+    if (existing.code === null && existing.hours > 0) {
+      setReplaceAsk({ iso, hours: existing.hours, code });
+      return;
+    }
+    applyCodeTo(existing, code);
+  }
+
+  function applyCodeTo(existing: CalendarSession, code: SessionCode) {
+    runOptimistic(
+      sessions.map((s) => (s.id === existing.id ? { ...s, hours: 0, code, start_time: null, end_time: null } : s)),
+      () => updateSession({ sessionId: existing.id, code, startTime: null, endTime: null, scope: "this" }),
+      () => `Marked ${formatLongDate(existing.session_date)} as ${codeLabel(code)}.`,
+    );
   }
 
   function closeEditor() {
@@ -353,24 +432,39 @@ export function CalendarTab({ studentId, sessions: serverSessions, today }: Prop
         </div>
       </dl>
 
-      {/* Legend */}
-      <ul className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-600" aria-label="Legend">
-        <li className="flex items-center gap-1.5">
-          <span className={cn("inline-block size-3 rounded-sm", CHIP_STYLES.hours)} /> Hours tutored
-        </li>
-        <li className="flex items-center gap-1.5">
-          <span className={cn("inline-block size-3 rounded-sm", CHIP_STYLES.TA)} /> TA: Tutor absent
-        </li>
-        <li className="flex items-center gap-1.5">
-          <span className={cn("inline-block size-3 rounded-sm", CHIP_STYLES.SA)} /> SA: Student absent
-        </li>
-        <li className="flex items-center gap-1.5">
-          <span className={cn("inline-block size-3 rounded-sm", CHIP_STYLES.H)} /> H: Holiday
-        </li>
-        <li className="flex items-center gap-1.5">
-          <span className="inline-block size-3 rounded-sm ring-2 ring-primary ring-inset" /> Today
-        </li>
-      </ul>
+      {/* Legend and tool palette: the selected item is filled and checked. */}
+      <div className="mt-3 flex flex-wrap items-center gap-2" role="group" aria-label="Legend and marking tool">
+        {PALETTE.map((item) => {
+          const selected = mode === item.mode;
+          return (
+            <button
+              key={item.mode}
+              type="button"
+              aria-pressed={selected}
+              onClick={() => setMode(selected && item.mode !== "hours" ? "hours" : item.mode)}
+              className={cn(
+                "flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40",
+                selected ? cn("border-transparent", CHIP_STYLES[item.mode]) : "border-gray-200 bg-white text-gray-600 hover:bg-gray-50",
+              )}
+            >
+              {selected ? (
+                <CheckIcon className="size-3.5" aria-hidden="true" />
+              ) : (
+                <span className={cn("inline-block size-3 rounded-sm", CHIP_STYLES[item.mode])} aria-hidden="true" />
+              )}
+              {item.label}
+            </button>
+          );
+        })}
+        <span className="flex items-center gap-1.5 px-1 text-xs text-gray-600">
+          <span className="inline-block size-3 rounded-sm ring-2 ring-primary ring-inset" aria-hidden="true" /> Today
+        </span>
+      </div>
+      {mode !== "hours" ? (
+        <p role="status" className={cn("mt-2 rounded-md px-3 py-2 text-sm", CHIP_STYLES[mode])}>
+          Click any day to mark it as {codeLabel(mode)}. Press Escape when finished.
+        </p>
+      ) : null}
 
       {/* Grid */}
       <div
@@ -378,7 +472,7 @@ export function CalendarTab({ studentId, sessions: serverSessions, today }: Prop
         role="grid"
         aria-label={`${MONTH_LONG_NAMES[month - 1]} ${year}`}
         onKeyDown={handleGridKeyDown}
-        className="mt-2 overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm"
+        className={cn("mt-2 overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm", mode !== "hours" && "cursor-pointer")}
       >
         <div role="row" className="grid grid-cols-7 border-b border-gray-200 bg-gray-50 text-center text-xs font-medium text-gray-500">
           {WEEKDAY_SHORT.map((d) => (
@@ -414,6 +508,7 @@ export function CalendarTab({ studentId, sessions: serverSessions, today }: Prop
                     className={cn(
                       "flex min-h-14 w-full flex-col items-start gap-1 p-1 text-left transition-colors hover:bg-gray-50 focus:outline-none focus-visible:z-10 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary sm:min-h-20 sm:p-1.5",
                       selectedIso === cell.iso && "bg-accent",
+                      mode !== "hours" && "cursor-pointer",
                     )}
                   >
                     <span
@@ -443,7 +538,7 @@ export function CalendarTab({ studentId, sessions: serverSessions, today }: Prop
         ))}
       </div>
       <p className="mt-2 text-xs text-gray-500">
-        Click a day to add a session, or click a session to change it. Use the arrow keys to move between days.
+        Click a day to add or change a session. To mark an absence or holiday, choose a color above and then click the day.
       </p>
 
       {/* Editor: popover on wide screens, bottom sheet on phones */}
@@ -464,6 +559,37 @@ export function CalendarTab({ studentId, sessions: serverSessions, today }: Prop
           </PopoverContent>
         </Popover>
       )}
+
+      {/* A day with hours is only painted over after a yes. */}
+      <Dialog open={replaceAsk !== null} onOpenChange={(open) => (open ? null : setReplaceAsk(null))}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>
+              {replaceAsk ? `Replace ${formatHoursLabel(replaceAsk.hours)} with ${codeLabel(replaceAsk.code)}?` : ""}
+            </DialogTitle>
+            <DialogDescription>
+              {replaceAsk ? `${formatLongDate(replaceAsk.iso)} will count as 0 hours and lose its start and end time.` : ""}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setReplaceAsk(null)} disabled={pending}>
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              disabled={pending}
+              onClick={() => {
+                if (!replaceAsk) return;
+                const existing = byDate.get(replaceAsk.iso);
+                setReplaceAsk(null);
+                if (existing) applyCodeTo(existing, replaceAsk.code);
+              }}
+            >
+              Replace
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {selectedIso ? (
         <DeleteSessionDialog

@@ -64,7 +64,7 @@ All demo accounts use the password `Demo1234!`.
 | `tutor2@lvaep.demo` | Tutor (James Okafor) | Two students, one with a missing report last month |
 | `staff@lvaep.demo` | Staff (Dana Rivera) | Both tutors, all students, missing reports list, full records |
 
-The seed uses dates relative to today, so the current fiscal year always has data: weekly sessions with start and end times, a few absences and a holiday, goals attained (including two of the tutor's own under E. Other(s)), one student no longer tutored with a reason, and a submitted report for every completed month of the fiscal year for three of the students. Carlos has none, so the staff "missing reports" card has something to show.
+The seed uses dates relative to today, so the current fiscal year always has data: weekly sessions with start and end times from July 1 through the end of the current month (each schedule ends with that month), a few absences and a holiday, goals attained (including two of the tutor's own under E. Other(s)), one student no longer tutored with a reason, and a submitted report for every completed month of the fiscal year for three of the students. Carlos has none, so the staff "missing reports" card has something to show.
 
 ### Resetting demo data
 

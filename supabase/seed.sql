@@ -8,7 +8,8 @@
 --   tutor1@lvaep.demo   tutor   Maria Alvarez
 --   tutor2@lvaep.demo   tutor   James Okafor
 --
--- Dates are relative to today so the demo always shows the current fiscal year.
+-- Dates are relative to today so the demo always shows the current fiscal year:
+-- sessions run from July 1 through the end of the month the seed runs in.
 
 create extension if not exists pgcrypto with schema extensions;
 
@@ -27,8 +28,10 @@ declare
 
   today date := current_date;
   fy_start date := make_date(public.fiscal_year_of(current_date), 7, 1);
-  fy_end date := public.fiscal_year_end(current_date);
-  seed_start date := greatest(fy_start, today - 70);
+  -- Sessions run from the start of the fiscal year through the end of the
+  -- month the seed runs in, and each schedule ends with that month.
+  seed_start date := fy_start;
+  seed_end date := (date_trunc('month', today) + interval '1 month')::date - 1;
   last_month_first date := date_trunc('month', today)::date - interval '1 month';
   last_month_last date := date_trunc('month', today)::date - 1;
   month_first date;
@@ -83,7 +86,7 @@ begin
     (fatima_id, tutor2_id, 'Fatima Noor',  'Bloomfield Public Library', false, null, null),
     (carlos_id, tutor2_id, 'Carlos Ruiz',  'Nutley Public Library', false, null, null);
 
-  -- Recurring schedules, materialized through the end of the fiscal year,
+  -- Recurring schedules, materialized through the end of the current month,
   -- the same way the app does it: every day gets the schedule's start and
   -- end, and hours are the difference in quarter hours.
   for r in select * from jsonb_to_recordset(schedule) as x(student uuid, tutor uuid, weekday integer, start_time time, end_time time)
@@ -91,11 +94,11 @@ begin
     -- first matching weekday on or after seed_start
     d := seed_start + ((r.weekday - extract(dow from seed_start)::integer + 7) % 7);
 
-    insert into public.recurrence_rules (student_id, tutor_id, weekday, start_date, default_hours, start_time, end_time)
-    values (r.student, r.tutor, r.weekday, d, round(extract(epoch from (r.end_time - r.start_time)) / 900) / 4, r.start_time, r.end_time)
+    insert into public.recurrence_rules (student_id, tutor_id, weekday, start_date, end_date, default_hours, start_time, end_time)
+    values (r.student, r.tutor, r.weekday, d, seed_end, round(extract(epoch from (r.end_time - r.start_time)) / 900) / 4, r.start_time, r.end_time)
     returning id into rule_id;
 
-    while d <= fy_end loop
+    while d <= seed_end loop
       insert into public.sessions (student_id, tutor_id, session_date, hours, code, recurrence_rule_id, start_time, end_time)
       values (r.student, r.tutor, d, round(extract(epoch from (r.end_time - r.start_time)) / 900) / 4, null, rule_id, r.start_time, r.end_time)
       on conflict (student_id, session_date) do nothing;

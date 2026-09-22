@@ -34,7 +34,7 @@ export function StudentCard({ student, today }: { student: StudentWithStats; tod
           <p className="mt-0.5 text-sm text-gray-600">{student.tutoring_site}</p>
           {stopped ? (
             <p className="mt-2 text-sm text-gray-600">
-              <span className="font-medium text-gray-800">Stopped</span>
+              <span className="font-medium text-gray-800">No longer tutored</span>
               {student.stopped_at ? ` on ${formatLongDate(student.stopped_at.slice(0, 10))}` : ""}
               {student.stopped_reason ? `: ${student.stopped_reason}` : ""}
             </p>
@@ -78,7 +78,7 @@ export function StudentCard({ student, today }: { student: StudentWithStats; tod
             </Button>
           ) : (
             <Button variant="outline" size="sm" onClick={() => setStopOpen(true)}>
-              Mark as stopped
+              No longer tutoring
             </Button>
           )}
         </div>

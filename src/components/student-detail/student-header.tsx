@@ -23,7 +23,7 @@ export function StudentHeader({ student }: { student: Student }) {
           role="status"
           className="mb-4 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900"
         >
-          <span className="font-medium">This student is marked as stopped</span>
+          <span className="font-medium">You are no longer tutoring this student</span>
           {student.stopped_at ? ` since ${formatLongDate(student.stopped_at.slice(0, 10))}` : ""}.
           {student.stopped_reason ? ` Reason: ${student.stopped_reason}` : ""} You can still edit their
           record, or reactivate them.
@@ -65,7 +65,7 @@ export function StudentHeader({ student }: { student: Student }) {
             </Button>
           ) : (
             <Button variant="outline" onClick={() => setStopOpen(true)}>
-              Mark as stopped
+              No longer tutoring
             </Button>
           )}
         </div>

@@ -134,7 +134,7 @@ export async function stopStudent(
     )
     .eq("id", id.data)
     .eq("tutor_id", user.id);
-  if (error) return fail("We could not mark the student as stopped. Please try again.");
+  if (error) return fail("We could not save that the student is no longer tutored. Please try again.");
   if (!count) return fail("That student could not be found.");
 
   revalidateStudent(id.data);

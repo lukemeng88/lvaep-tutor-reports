@@ -46,7 +46,7 @@ export default async function HomePage() {
       {data.stopped.length > 0 ? (
         <section aria-labelledby="stopped-heading" className="mt-8">
           <h2 id="stopped-heading" className="text-lg font-semibold text-gray-700">
-            Stopped students
+            No longer tutored
             <span className="ml-2 text-sm font-normal text-gray-500">{data.stopped.length}</span>
           </h2>
           <p className="mt-1 text-sm text-gray-600">

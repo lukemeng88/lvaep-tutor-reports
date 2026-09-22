@@ -6,7 +6,7 @@ It replaces the paper form (one sheet per student with a 31 by 12 attendance gri
 
 - one tutor account that holds all of that tutor's students,
 - a month calendar with weekly repeating sessions and color coded absence and holiday codes,
-- "Mark as stopped" as an action with a required reason,
+- "No longer tutoring" as an action with a required reason,
 - collapsible goal categories instead of one long list,
 - staff views built from versioned monthly submissions, with a live view for progress before month end.
 
@@ -87,7 +87,7 @@ Import the repository, add the two `NEXT_PUBLIC_SUPABASE_*` environment variable
 
 ### Tutors
 
-- **Home** (`/home`): total hours card (this month, this fiscal year, all time), active students with hours this month and fiscal year, goals attained and the next session, a greyed out "Stopped students" section with reasons and a Reactivate action. Add a student (name and site), open a student to edit, submit a report and mark as stopped from each row.
+- **Home** (`/home`): total hours card (this month, this fiscal year, all time), active students with hours this month and fiscal year, goals attained and the next session, a greyed out "No longer tutored" section with reasons and a Reactivate action. Add a student (name and site), open a student to edit, submit a report and end tutoring ("No longer tutoring") from each row.
 - **Student detail** (`/students/[id]`): header fields save inline as you type. Two tabs, both auto saving with a small Saved indicator and a revert plus toast on failure.
   - **Tutoring days**: a month calendar scoped to the fiscal year (July to June) with a fiscal year selector for past years. Click an empty day to enter a start and end time in 15 minute steps; the hours are the difference, shown live, and a session can optionally repeat weekly to the end of the fiscal year with the same times. Click a session to change its times, set a code (Tutor absent, Student absent, Holiday) or delete it; sessions that belong to a weekly schedule ask "This day only" or "This and future days". Hours show in blue, TA in orange, SA in yellow, H in gray; today is outlined. Arrow keys move between days and the editor becomes a bottom sheet on phones.
   - **Goals**: one collapsible section per category with "n of m attained", a checkbox and a date per goal, and a free text field for "Other(s)". Wording and asterisks are copied from the form.
@@ -230,7 +230,7 @@ The calendar's weekly materialization and "this and future days" edits run insid
 - TA, SA and H days always count as 0 hours, enforced by a check constraint and in every total.
 - Goal wording, asterisks, contact information and the footer note are program provided and copied verbatim.
 - Submitting a report does not lock data. Each submission is a versioned snapshot; the live data stays editable and resubmitting creates a new version.
-- Stopped students remain visible, greyed, with their reason and date, and can be reactivated. History is never deleted.
+- Students no longer tutored remain visible, greyed, with their reason and date, and can be reactivated. History is never deleted. Staff see the change in their view, so the tutor is not asked to notify the office. The word "Stopped" appears only on the staff record, where it mirrors the paper form.
 - Staff are read only over tutor data.
 - No email confirmation and no OAuth, to keep the demo frictionless.
 - A weekly schedule writes a session for every matching weekday through the end of the fiscal year, using the default hours. Hour totals on the home card, the hours page and the calendar strip therefore count only sessions dated today or earlier, and the calendar shows the rest as "more planned". A report snapshot includes every session in the month, so the intended flow is to submit after the month ends (or delete days that did not happen first).
@@ -249,7 +249,7 @@ The calendar's weekly materialization and "this and future days" edits run insid
 
 ## What I would do next
 
-- Notify the office automatically (email) when a student is marked as stopped, and remind tutors about unsubmitted months near month end.
+- Notify the office automatically (email) when a tutor ends tutoring a student, and remind tutors about unsubmitted months near month end.
 - Let staff export a whole month for every student as one CSV or PDF bundle, and add program level totals (hours per site, per month).
 - Add a "did this session happen?" nudge for planned days once the date passes, instead of relying on tutors to delete days that did not happen.
 - Allow a session's notes to be edited in the calendar (the column exists) and show them on the staff record.

@@ -327,12 +327,15 @@ test("a tutor records a month, submits it twice, and staff reads the record", as
     await expect(page.getByText(/Report submitted for .* \(version 2\)/)).toBeVisible();
   });
 
-  await test.step("marks the student as stopped with a reason, then reactivates", async () => {
-    await page.click(`[data-student-card]:has-text("${renamedStudent}") button:has-text("Mark as stopped")`);
+  await test.step("ends tutoring the student with a reason, then reactivates", async () => {
+    await page.click(`[data-student-card]:has-text("${renamedStudent}") button:has-text("No longer tutoring")`);
+    await expect(dialog(page)).toContainText("No longer tutoring this student?");
+    await expect(dialog(page)).not.toContainText("notify the office");
     await page.fill("#stop-reason", "Moved out of the area");
-    await page.click(`${MODAL} button[type=submit]:has-text('Mark as stopped')`);
-    await expect(page.getByText(`${renamedStudent} is marked as stopped.`)).toBeVisible();
+    await page.click(`${MODAL} button[type=submit]:has-text('No longer tutoring')`);
+    await expect(page.getByText(`${renamedStudent} is no longer being tutored.`)).toBeVisible();
     const stoppedSection = page.locator("section[aria-labelledby=stopped-heading]");
+    await expect(stoppedSection).toContainText("No longer tutored");
     await expect(stoppedSection).toContainText(renamedStudent);
     await expect(stoppedSection).toContainText("Moved out of the area");
     await stoppedSection.locator(`[data-student-card]:has-text("${renamedStudent}") button:has-text("Reactivate")`).click();

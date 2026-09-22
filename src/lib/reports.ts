@@ -73,7 +73,7 @@ export function validateReport(input: ReportValidationInput): ReportIssue[] {
   }
   if (input.isStopped && !(input.stoppedReason ?? "").trim()) {
     issues.push({
-      message: "The student is marked as stopped but no reason is recorded.",
+      message: "The student is no longer tutored but no reason is recorded.",
       href: studentPage,
       linkLabel: "Add a reason",
     });

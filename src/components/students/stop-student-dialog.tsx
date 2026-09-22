@@ -14,7 +14,6 @@ import {
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { stopStudent } from "@/lib/actions/students";
-import { OFFICE } from "@/lib/office";
 
 type Props = {
   open: boolean;
@@ -37,7 +36,7 @@ export function StopStudentDialog({ open, onOpenChange, studentId, studentName }
         setError(result.error);
         return;
       }
-      toast.success(`${studentName} is marked as stopped.`);
+      toast.success(`${studentName} is no longer being tutored.`);
       setReason("");
       onOpenChange(false);
     });
@@ -48,10 +47,10 @@ export function StopStudentDialog({ open, onOpenChange, studentId, studentName }
       <DialogContent className="sm:max-w-md">
         <form onSubmit={handleSubmit} className="contents" noValidate>
           <DialogHeader>
-            <DialogTitle>Mark {studentName} as stopped</DialogTitle>
+            <DialogTitle>No longer tutoring this student?</DialogTitle>
             <DialogDescription>
-              Use this when the student is no longer being tutored. Their history stays and you can
-              reactivate them later.
+              Use this when you are no longer tutoring {studentName}. Their history stays, staff see the
+              change in their view, and you can reactivate them later.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
@@ -67,12 +66,6 @@ export function StopStudentDialog({ open, onOpenChange, studentId, studentName }
                 placeholder="For example: moved away, schedule conflict, completed goals"
               />
             </div>
-            <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
-              <p className="font-medium">Please notify the office as soon as possible.</p>
-              <p className="mt-1">
-                {OFFICE.email} or {OFFICE.phone}
-              </p>
-            </div>
             {error ? (
               <p role="alert" className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">
                 {error}
@@ -84,7 +77,7 @@ export function StopStudentDialog({ open, onOpenChange, studentId, studentName }
               Cancel
             </Button>
             <Button type="submit" variant="destructive" disabled={pending || !reason.trim()}>
-              {pending ? "Saving" : "Mark as stopped"}
+              {pending ? "Saving" : "No longer tutoring"}
             </Button>
           </DialogFooter>
         </form>

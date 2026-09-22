@@ -24,7 +24,7 @@ It replaces the paper form (one sheet per student with a 31 by 12 attendance gri
 cp .env.example .env.local
 ```
 
-Fill in `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` from your project's Settings, API page. `SUPABASE_SERVICE_ROLE_KEY` is optional: the app never uses it; only the Playwright end to end test does, to delete the accounts it creates. `.env.local` is git ignored.
+Fill in `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` from your project's Settings, API page. `SUPABASE_SERVICE_ROLE_KEY` is optional: the app never uses it. Only the Playwright end to end test (to delete the accounts it creates) and the cleanup script under "Resetting demo data" do. `.env.local` is git ignored.
 
 ### 3. Apply the migrations and the seed
 
@@ -64,7 +64,20 @@ All demo accounts use the password `Demo1234!`.
 | `tutor2@lvaep.demo` | Tutor (James Okafor) | Two students, one with a missing report last month |
 | `staff@lvaep.demo` | Staff (Dana Rivera) | Both tutors, all students, missing reports list, full records |
 
-The seed uses dates relative to today, so the current fiscal year always has data. Two students have a report submitted for last month; one does not, so the staff "missing reports" card has something to show.
+The seed uses dates relative to today, so the current fiscal year always has data: weekly sessions with start and end times, a few absences and a holiday, goals attained (including two of the tutor's own under E. Other(s)), one student no longer tutored with a reason, and a submitted report for every completed month of the fiscal year for three of the students. Carlos has none, so the staff "missing reports" card has something to show.
+
+### Resetting demo data
+
+Manual testing and end to end runs against the hosted project leave accounts behind. Two commands put the project back in shape:
+
+```bash
+npm run cleanup:test-data
+supabase db query --linked -f supabase/seed.sql
+```
+
+`npm run cleanup:test-data` runs `scripts/cleanup-test-data.ts` with the service role key from `.env.local`. It deletes every auth user whose email is not one of the three demo accounts, and with each user their profile, students, sessions, schedules, goals, custom goals and reports (the database cascades from the profile). It prints one line per removed user with those counts, then a total. Re-running the seed afterwards recreates the three demo accounts and their data from scratch.
+
+The end to end pass cleans up after itself: every account it signs up has an `e2e-<timestamp>-...@test.local` address, and a Playwright global teardown deletes every `@test.local` user when the run ends, pass or fail. The tests never sign in as a demo account, so the seed data is not touched by them.
 
 ### Scripts
 
@@ -75,7 +88,8 @@ The seed uses dates relative to today, so the current fiscal year always has dat
 | `npm run lint` | ESLint (Next.js core web vitals and TypeScript rules) |
 | `npm run typecheck` | `tsc --noEmit` with strict mode |
 | `npm run test` | Vitest unit tests |
-| `npm run test:e2e` | Playwright end to end pass over every user facing flow, plus a check that one tutor cannot read another's students through the API (needs `npx playwright install chromium` once, a running app or it starts `npm run dev`, and a real Supabase project; it creates and removes its own accounts) |
+| `npm run test:e2e` | Playwright end to end pass over every user facing flow, plus a check that one tutor cannot read another's students through the API (needs `npx playwright install chromium` once, a running app or it starts `npm run dev`, and a real Supabase project; it creates `@test.local` accounts and a global teardown removes them) |
+| `npm run cleanup:test-data` | Deletes every account that is not a demo account, with everything it owns, and prints what went (see "Resetting demo data") |
 
 Set `PLAYWRIGHT_BASE_URL` if the app runs on a port other than 3000.
 
@@ -131,6 +145,9 @@ src/
 supabase/
   migrations/          schema, RLS, goal definitions, staff read only fix, session functions, session times, custom goals
   seed.sql             demo accounts and data
+scripts/
+  cleanup-test-data.ts removes every non demo account and its data from the hosted project
+  delete-users.ts      the service role helper it shares with the Playwright teardown
   config.toml          minimal CLI config (auth settings only)
 tests/
   unit/                Vitest

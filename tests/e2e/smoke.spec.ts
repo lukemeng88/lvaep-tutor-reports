@@ -2,19 +2,20 @@ import { expect, test, type Page } from "@playwright/test";
 import { createClient } from "@supabase/supabase-js";
 
 // End to end pass against a running app and a real Supabase project. It
-// creates its own tutor, staff and second tutor accounts and removes them
-// afterwards when SUPABASE_SERVICE_ROLE_KEY is available. Every user facing
-// flow is exercised once, in the order a tutor and then a staff member would
-// meet them.
+// signs up its own tutor, staff and second tutor accounts, all with unique
+// @test.local addresses; the global teardown removes every such account
+// afterwards. The demo accounts are never used, so nothing the pass does
+// touches the seed data. Every user facing flow is exercised once, in the
+// order a tutor and then a staff member would meet them.
 
 test.describe.configure({ mode: "serial" });
 test.setTimeout(360_000);
 
 const unique = Date.now();
 const password = "Smoke1234!";
-const tutor = { name: `Smoke Tutor ${unique}`, email: `smoke-tutor-${unique}@lvaep.demo` };
-const otherTutor = { name: `Smoke Other ${unique}`, email: `smoke-other-${unique}@lvaep.demo` };
-const staff = { name: `Smoke Staff ${unique}`, email: `smoke-staff-${unique}@lvaep.demo` };
+const tutor = { name: `Smoke Tutor ${unique}`, email: `e2e-${unique}-tutor@test.local` };
+const otherTutor = { name: `Smoke Other ${unique}`, email: `e2e-${unique}-other@test.local` };
+const staff = { name: `Smoke Staff ${unique}`, email: `e2e-${unique}-staff@test.local` };
 const studentName = `Smoke Student ${unique}`;
 const renamedStudent = `${studentName} Jr`;
 
@@ -92,19 +93,6 @@ async function paint(page: Page, iso: string) {
 // The modal dialog itself, not a popover that is still fading out.
 const MODAL = "[data-slot=dialog-content]";
 const dialog = (page: Page) => page.locator(MODAL);
-
-test.afterAll(async () => {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!url || !serviceKey) return;
-  const admin = createClient(url, serviceKey, { auth: { persistSession: false } });
-  const { data } = await admin.auth.admin.listUsers({ perPage: 1000 });
-  for (const user of data?.users ?? []) {
-    if ([tutor.email, otherTutor.email, staff.email].includes(user.email ?? "")) {
-      await admin.auth.admin.deleteUser(user.id);
-    }
-  }
-});
 
 test("a tutor records a month, submits it twice, and staff reads the record", async ({ page }) => {
   // Staff signs up first, is kept off tutor pages, and signs out.

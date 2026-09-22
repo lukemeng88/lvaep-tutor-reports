@@ -31,6 +31,8 @@ declare
   seed_start date := greatest(fy_start, today - 70);
   last_month_first date := date_trunc('month', today)::date - interval '1 month';
   last_month_last date := date_trunc('month', today)::date - 1;
+  month_first date;
+  month_last date;
 
   r record;
   d date;
@@ -145,31 +147,50 @@ begin
     (ahmed_id, tutor1_id, 'Passed the driver''s license written test', true, today - 8, 0),
     (ahmed_id, tutor1_id, 'Read a bus schedule without help', false, null, 1);
 
-  -- Submitted reports for last month (only when last month is inside this fiscal year).
-  if last_month_first >= fy_start then
+  -- Submitted reports for every completed month since the data starts, for
+  -- three of the students. Carlos has none, so the staff "missing reports"
+  -- card has something to show. Snapshots take the same shape the app
+  -- writes: Day(s) from the schedules, Time(s) from the usual start and end,
+  -- and each session's times.
+  for month_first in
+    select generate_series(date_trunc('month', seed_start)::date, last_month_first, interval '1 month')::date
+  loop
+    month_last := (month_first + interval '1 month')::date - 1;
     insert into public.monthly_reports (student_id, tutor_id, fiscal_year, month, version, submitted_at, snapshot)
     select
       s.id, s.tutor_id,
-      public.fiscal_year_of(last_month_first),
-      extract(month from last_month_first)::integer,
+      public.fiscal_year_of(month_first),
+      extract(month from month_first)::integer,
       1,
-      last_month_last + interval '1 day' + interval '9 hours',
+      month_last + interval '1 day' + interval '9 hours',
       jsonb_build_object(
         'tutor_name', p.full_name,
         'student_name', s.full_name,
         'tutoring_site', s.tutoring_site,
-        'default_days', s.default_days,
-        'default_times', s.default_times,
-        'fiscal_year', public.fiscal_year_of(last_month_first),
-        'month', extract(month from last_month_first)::integer,
+        'days', (
+          select string_agg(w.name, ', ' order by w.position)
+          from (
+            select distinct (array['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'])[rr.weekday + 1] as name, (rr.weekday + 6) % 7 as position
+            from public.recurrence_rules rr where rr.student_id = s.id
+          ) w
+        ),
+        'times', (
+          select ltrim(to_char(date '2000-01-01' + rr.start_time, 'HH12:MI am'), '0') || ' to ' || ltrim(to_char(date '2000-01-01' + rr.end_time, 'HH12:MI am'), '0')
+          from public.recurrence_rules rr where rr.student_id = s.id order by rr.start_time limit 1
+        ),
+        'fiscal_year', public.fiscal_year_of(month_first),
+        'month', extract(month from month_first)::integer,
         'sessions', coalesce((
-          select jsonb_agg(jsonb_build_object('date', to_char(x.session_date, 'YYYY-MM-DD'), 'hours', x.hours, 'code', x.code) order by x.session_date)
+          select jsonb_agg(jsonb_build_object(
+            'date', to_char(x.session_date, 'YYYY-MM-DD'), 'hours', x.hours, 'code', x.code,
+            'start_time', to_char(date '2000-01-01' + x.start_time, 'HH24:MI'), 'end_time', to_char(date '2000-01-01' + x.end_time, 'HH24:MI')
+          ) order by x.session_date)
           from public.sessions x
-          where x.student_id = s.id and x.session_date between last_month_first and last_month_last
+          where x.student_id = s.id and x.session_date between month_first and month_last
         ), '[]'::jsonb),
         'total_hours', coalesce((
           select sum(x.hours) from public.sessions x
-          where x.student_id = s.id and x.session_date between last_month_first and last_month_last
+          where x.student_id = s.id and x.session_date between month_first and month_last
         ), 0),
         'is_stopped', s.is_stopped,
         'stopped_reason', s.stopped_reason,
@@ -185,6 +206,6 @@ begin
     from public.students s
     join public.profiles p on p.id = s.tutor_id
     where s.id in (rosa_id, ahmed_id, fatima_id)
-      and exists (select 1 from public.sessions x where x.student_id = s.id and x.session_date between last_month_first and last_month_last);
-  end if;
+      and exists (select 1 from public.sessions x where x.student_id = s.id and x.session_date between month_first and month_last);
+  end loop;
 end $$;

@@ -144,6 +144,25 @@ export type Database = {
       is_staff: { Args: Record<string, never>; Returns: boolean };
       is_tutor: { Args: Record<string, never>; Returns: boolean };
       owns_student: { Args: { sid: string }; Returns: boolean };
+      create_recurring_sessions: {
+        Args: {
+          p_student_id: string;
+          p_weekday: number;
+          p_start_date: string;
+          p_end_date: string;
+          p_hours: number;
+          p_dates: string[];
+        };
+        Returns: string;
+      };
+      update_recurring_sessions_from: {
+        Args: { p_rule_id: string; p_from_date: string; p_hours: number; p_code: string | null };
+        Returns: number;
+      };
+      delete_recurring_sessions_from: {
+        Args: { p_rule_id: string; p_from_date: string };
+        Returns: number;
+      };
     };
     Enums: Record<string, never>;
     CompositeTypes: Record<string, never>;

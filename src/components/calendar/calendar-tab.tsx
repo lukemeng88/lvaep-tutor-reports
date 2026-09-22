@@ -43,14 +43,14 @@ const CHIP_STYLES: Record<"hours" | "TA" | "SA" | "H", string> = {
   H: "bg-[var(--session-h-bg)] text-[var(--session-h-fg)]",
 };
 
-// The legend doubles as a tool palette. "Hours tutored" is the normal mode,
-// where a day opens the popover; a code paints days with one click.
+// The legend is a tool palette in two groups: Edit, with "Tutoring hours",
+// the normal mode where a day opens the popover; and Mark day as, with the
+// three codes that paint a day with one click. One button is selected at a
+// time. The cells keep the short codes (TA, SA, H).
 type Mode = "hours" | SessionCode;
 
-const PALETTE: { mode: Mode; label: string }[] = [
-  { mode: "hours", label: "Hours tutored" },
-  ...SESSION_CODES.map((c) => ({ mode: c.value as Mode, label: `${c.short}: ${c.label}` })),
-];
+const EDIT_TOOLS: { mode: Mode; label: string }[] = [{ mode: "hours", label: "Tutoring hours" }];
+const MARK_TOOLS: { mode: Mode; label: string }[] = SESSION_CODES.map((c) => ({ mode: c.value as Mode, label: c.label }));
 
 export function CalendarTab({ studentId, sessions: serverSessions, today }: Props) {
   const currentFiscalYear = fiscalYearOf(today);
@@ -432,33 +432,38 @@ export function CalendarTab({ studentId, sessions: serverSessions, today }: Prop
         </div>
       </dl>
 
-      {/* Legend and tool palette: the selected item is filled and checked. */}
-      <div className="mt-3 flex flex-wrap items-center gap-2" role="group" aria-label="Legend and marking tool">
-        {PALETTE.map((item) => {
-          const selected = mode === item.mode;
-          return (
-            <button
-              key={item.mode}
-              type="button"
-              aria-pressed={selected}
-              onClick={() => setMode(selected && item.mode !== "hours" ? "hours" : item.mode)}
-              className={cn(
-                "flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40",
-                selected ? cn("border-transparent", CHIP_STYLES[item.mode]) : "border-gray-200 bg-white text-gray-600 hover:bg-gray-50",
-              )}
-            >
-              {selected ? (
-                <CheckIcon className="size-3.5" aria-hidden="true" />
-              ) : (
-                <span className={cn("inline-block size-3 rounded-sm", CHIP_STYLES[item.mode])} aria-hidden="true" />
-              )}
-              {item.label}
-            </button>
-          );
-        })}
-        <span className="flex items-center gap-1.5 px-1 text-xs text-gray-600">
-          <span className="inline-block size-3 rounded-sm ring-2 ring-primary ring-inset" aria-hidden="true" /> Today
-        </span>
+      {/* Tool palette: the selected button is filled in its color and checked. */}
+      <div className="mt-3 flex flex-wrap items-center gap-x-6 gap-y-2" role="group" aria-label="Calendar tools">
+        {[
+          { label: "Edit:", tools: EDIT_TOOLS },
+          { label: "Mark day as:", tools: MARK_TOOLS },
+        ].map((group) => (
+          <div key={group.label} className="flex flex-wrap items-center gap-2">
+            <span className="text-xs text-gray-500">{group.label}</span>
+            {group.tools.map((item) => {
+              const selected = mode === item.mode;
+              return (
+                <button
+                  key={item.mode}
+                  type="button"
+                  aria-pressed={selected}
+                  onClick={() => setMode(selected && item.mode !== "hours" ? "hours" : item.mode)}
+                  className={cn(
+                    "flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40",
+                    selected ? cn("border-transparent", CHIP_STYLES[item.mode]) : "border-gray-200 bg-white text-gray-600 hover:bg-gray-50",
+                  )}
+                >
+                  {selected ? (
+                    <CheckIcon className="size-3.5" aria-hidden="true" />
+                  ) : (
+                    <span className={cn("inline-block size-2.5 rounded-full", CHIP_STYLES[item.mode])} aria-hidden="true" />
+                  )}
+                  {item.label}
+                </button>
+              );
+            })}
+          </div>
+        ))}
       </div>
       {mode !== "hours" ? (
         <p role="status" className={cn("mt-2 rounded-md px-3 py-2 text-sm", CHIP_STYLES[mode])}>

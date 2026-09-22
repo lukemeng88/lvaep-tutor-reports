@@ -220,12 +220,12 @@ test("a tutor records a month, submits it twice, and staff reads the record", as
   });
 
   await test.step("marks TA and SA through the palette", async () => {
-    await page.click("button:has-text('TA: Tutor absent')");
+    await page.click("button:has-text('Tutor absent')");
     await expect(page.locator("p[role=status]")).toContainText("Click any day to mark it as Tutor absent");
     await paint(page, day(3));
     await expect(page.getByText(/Marked .* as Tutor absent\./)).toBeVisible();
     await expect(page.locator(`button[data-iso="${day(3)}"]`)).toContainText("TA");
-    await page.click("button:has-text('SA: Student absent')");
+    await page.click("button:has-text('Student absent')");
     await paint(page, day(4));
     await expect(page.locator(`button[data-iso="${day(4)}"]`)).toContainText("SA");
     // The same code again clears the day, and marking it back restores it.
@@ -236,7 +236,7 @@ test("a tutor records a month, submits it twice, and staff reads the record", as
     await expect(page.locator(`button[data-iso="${day(4)}"]`)).toContainText("SA");
     await settled(page, day(4));
     await page.keyboard.press("Escape");
-    await expect(page.locator("button:has-text('Hours tutored')")).toHaveAttribute("aria-pressed", "true");
+    await expect(page.locator("button:has-text('Tutoring hours')")).toHaveAttribute("aria-pressed", "true");
   });
 
   await test.step("marks H through the popover", async () => {
@@ -249,7 +249,7 @@ test("a tutor records a month, submits it twice, and staff reads the record", as
   });
 
   await test.step("replaces an hours day with a code after confirming", async () => {
-    await page.click("button:has-text('H: Holiday')");
+    await page.click("button:has-text('Holiday')");
     await paint(page, day(9));
     await expect(dialog(page)).toContainText("Replace 2 hours with Holiday?");
     await page.click(`${MODAL} button:has-text('Cancel')`);

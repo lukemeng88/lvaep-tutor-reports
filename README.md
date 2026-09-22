@@ -24,7 +24,7 @@ It replaces the paper form (one sheet per student with a 31 by 12 attendance gri
 cp .env.example .env.local
 ```
 
-Fill in `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` from your project's Settings, API page. `SUPABASE_SERVICE_ROLE_KEY` is optional: the app never uses it; only the Playwright smoke test does, to delete the accounts it creates. `.env.local` is git ignored.
+Fill in `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` from your project's Settings, API page. `SUPABASE_SERVICE_ROLE_KEY` is optional: the app never uses it; only the Playwright end to end test does, to delete the accounts it creates. `.env.local` is git ignored.
 
 ### 3. Apply the migrations and the seed
 
@@ -75,7 +75,7 @@ The seed uses dates relative to today, so the current fiscal year always has dat
 | `npm run lint` | ESLint (Next.js core web vitals and TypeScript rules) |
 | `npm run typecheck` | `tsc --noEmit` with strict mode |
 | `npm run test` | Vitest unit tests |
-| `npm run test:e2e` | Playwright smoke test (needs `npx playwright install chromium` once, a running app or it starts `npm run dev`, and a real Supabase project) |
+| `npm run test:e2e` | Playwright end to end pass over every user facing flow, plus a check that one tutor cannot read another's students through the API (needs `npx playwright install chromium` once, a running app or it starts `npm run dev`, and a real Supabase project; it creates and removes its own accounts) |
 
 Set `PLAYWRIGHT_BASE_URL` if the app runs on a port other than 3000.
 
@@ -134,7 +134,7 @@ supabase/
   config.toml          minimal CLI config (auth settings only)
 tests/
   unit/                Vitest
-  e2e/                 Playwright smoke test
+  e2e/                 Playwright end to end pass
 ```
 
 All reads and writes go through server components, server actions and one route handler using the server Supabase client, so Row Level Security applies to every query. The browser client exists for auth only.

@@ -1,4 +1,4 @@
-import type { GoalState } from "@/lib/goals";
+import type { CustomGoalState, GoalState } from "@/lib/goals";
 import { calendarYearForMonth, fiscalYearOf } from "@/lib/fiscal-year";
 import { sumHours, type HoursSession } from "@/lib/hours";
 import type { SessionCode } from "@/lib/supabase/database.types";
@@ -29,7 +29,11 @@ export type ReportSnapshot = {
   is_stopped: boolean;
   stopped_reason: string | null;
   goals: GoalState[];
+  /** The tutor's own goals under E. Other(s), as they stood at submission. */
+  custom_goals: SnapshotCustomGoal[];
 };
+
+export type SnapshotCustomGoal = { label: string; attained: boolean; attained_on: string | null };
 
 export type ReportIssue = {
   message: string;
@@ -97,6 +101,7 @@ export type SnapshotInput = {
   month: number;
   sessions: HoursSession[];
   goals: GoalState[];
+  customGoals: CustomGoalState[];
 };
 
 /** Keeps only the sessions inside the report month and computes the total. */
@@ -125,6 +130,7 @@ export function buildSnapshot(input: SnapshotInput): ReportSnapshot {
     is_stopped: input.student.is_stopped,
     stopped_reason: input.student.stopped_reason,
     goals: input.goals,
+    custom_goals: input.customGoals.map((g) => ({ label: g.label, attained: g.attained, attained_on: g.attained_on })),
   };
 }
 
@@ -199,5 +205,21 @@ export function parseSnapshot(value: unknown): ReportSnapshot | null {
           ];
         })
       : [],
+    // Snapshots from before custom goals carried the old E1 row's text in goals.
+    custom_goals: Array.isArray(v.custom_goals)
+      ? (v.custom_goals as unknown[]).flatMap((g) => {
+          if (!g || typeof g !== "object") return [];
+          const r = g as Record<string, unknown>;
+          if (typeof r.label !== "string" || !r.label.trim()) return [];
+          return [{ label: r.label, attained: r.attained === true, attained_on: typeof r.attained_on === "string" ? r.attained_on : null }];
+        })
+      : Array.isArray(v.goals)
+        ? (v.goals as unknown[]).flatMap((g) => {
+            if (!g || typeof g !== "object") return [];
+            const r = g as Record<string, unknown>;
+            if (r.goal_id !== "E1" || typeof r.other_text !== "string" || !r.other_text.trim()) return [];
+            return [{ label: r.other_text, attained: r.attained === true, attained_on: typeof r.attained_on === "string" ? r.attained_on : null }];
+          })
+        : [],
   };
 }

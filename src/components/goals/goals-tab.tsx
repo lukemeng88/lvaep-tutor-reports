@@ -5,22 +5,24 @@ import { toast } from "sonner";
 import { ChevronDownIcon } from "lucide-react";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Label } from "@/components/ui/label";
-import { Input } from "@/components/ui/input";
 import { SaveIndicator } from "@/components/student-detail/save-indicator";
 import { useSaveStatus } from "@/hooks/use-save-status";
 import { useDebouncedCallback } from "@/hooks/use-debounced-callback";
 import { saveGoal } from "@/lib/actions/goals";
-import { countAttained, type GoalGroup, type GoalState } from "@/lib/goals";
+import { countAttained, type CustomGoalState, type GoalGroup, type GoalState } from "@/lib/goals";
 import { todayISO } from "@/lib/fiscal-year";
 import type { GoalDefinition } from "@/lib/supabase/database.types";
+import { CustomGoalsSection } from "./custom-goals-section";
 
 type Props = {
   studentId: string;
   groups: GoalGroup[];
   initialStates: GoalState[];
+  /** The tutor's own goals under E. Other(s). */
+  initialCustomGoals: CustomGoalState[];
 };
 
-export function GoalsTab({ studentId, groups, initialStates }: Props) {
+export function GoalsTab({ studentId, groups, initialStates, initialCustomGoals }: Props) {
   const [states, setStates] = useState<Map<string, GoalState>>(
     () => new Map(initialStates.map((s) => [s.goal_id, s])),
   );
@@ -122,6 +124,21 @@ export function GoalsTab({ studentId, groups, initialStates }: Props) {
             </Collapsible>
           );
         })}
+        <CustomGoalsSection
+          studentId={studentId}
+          initial={initialCustomGoals}
+          open={openCategories.has("E")}
+          onOpenChange={(next) =>
+            setOpenCategories((current) => {
+              const copy = new Set(current);
+              if (next) copy.add("E");
+              else copy.delete("E");
+              return copy;
+            })
+          }
+          onSaving={track}
+          onError={markError}
+        />
       </div>
     </div>
   );
@@ -137,10 +154,8 @@ function GoalRow({
   onChange: (patch: Partial<GoalState>, debounce?: boolean) => void;
 }) {
   const attained = state?.attained ?? false;
-  const isOther = goal.category === "E";
   const checkboxId = `goal-${goal.id}`;
   const dateId = `goal-${goal.id}-date`;
-  const textId = `goal-${goal.id}-text`;
 
   return (
     <li className="flex flex-col gap-2 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
@@ -159,18 +174,8 @@ function GoalRow({
         />
         <div className="min-w-0 flex-1">
           <Label htmlFor={checkboxId} className="cursor-pointer font-normal text-gray-900">
-            {goal.number}. {isOther ? "Other goal" : goal.label}
+            {goal.number}. {goal.label}
           </Label>
-          {isOther ? (
-            <Input
-              id={textId}
-              aria-label="Describe the other goal"
-              placeholder="Describe the goal"
-              value={state?.other_text ?? ""}
-              onChange={(e) => onChange({ other_text: e.target.value }, true)}
-              className="mt-2"
-            />
-          ) : null}
         </div>
       </div>
       {attained ? (

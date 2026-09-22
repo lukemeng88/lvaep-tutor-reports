@@ -65,6 +65,7 @@ export default async function StaffStudentPage({
         stopped: record.student.is_stopped,
         stoppedReason: record.student.stopped_reason,
         goals: toGoalStates(record.definitions, record.liveGoals),
+        customGoals: record.liveCustomGoals,
       }
     : {
         tutor: latest.snapshot.tutor_name,
@@ -75,6 +76,7 @@ export default async function StaffStudentPage({
         stopped: latest.snapshot.is_stopped,
         stoppedReason: latest.snapshot.stopped_reason,
         goals: latest.snapshot.goals,
+        customGoals: latest.snapshot.custom_goals,
       };
 
   const basePath = `/staff/students/${record.student.id}`;
@@ -187,7 +189,7 @@ export default async function StaffStudentPage({
           </div>
 
           <div className="mt-4 print:mt-2">
-            <Achievements definitions={record.definitions} states={header.goals} />
+            <Achievements definitions={record.definitions} states={header.goals} customGoals={header.customGoals} />
           </div>
 
           <footer className="mt-4 border-t border-gray-300 pt-3 text-xs text-gray-700 print:mt-2 print:pt-2 print:text-[10px]">

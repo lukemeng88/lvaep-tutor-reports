@@ -137,9 +137,13 @@ begin
     (rosa_id,   tutor1_id, 'A1', false, null, null),
     (ahmed_id,  tutor1_id, 'D1', true,  today - 5, null),
     (ahmed_id,  tutor1_id, 'D4', true,  today - 5, null),
-    (ahmed_id,  tutor1_id, 'E1', true,  today - 8, 'Passed the driver''s license written test'),
     (fatima_id, tutor2_id, 'C6', true,  today - 20, null),
     (carlos_id, tutor2_id, 'A2', true,  today - 40, null);
+
+  -- Goals of the tutor's own, under E. Other(s).
+  insert into public.custom_goals (student_id, tutor_id, label, attained, attained_on, sort_order) values
+    (ahmed_id, tutor1_id, 'Passed the driver''s license written test', true, today - 8, 0),
+    (ahmed_id, tutor1_id, 'Read a bus schedule without help', false, null, 1);
 
   -- Submitted reports for last month (only when last month is inside this fiscal year).
   if last_month_first >= fy_start then
@@ -172,6 +176,10 @@ begin
         'goals', coalesce((
           select jsonb_agg(jsonb_build_object('goal_id', g.goal_id, 'attained', g.attained, 'attained_on', to_char(g.attained_on, 'YYYY-MM-DD'), 'other_text', g.other_text) order by g.goal_id)
           from public.goal_achievements g where g.student_id = s.id
+        ), '[]'::jsonb),
+        'custom_goals', coalesce((
+          select jsonb_agg(jsonb_build_object('label', c.label, 'attained', c.attained, 'attained_on', to_char(c.attained_on, 'YYYY-MM-DD')) order by c.sort_order, c.created_at)
+          from public.custom_goals c where c.student_id = s.id
         ), '[]'::jsonb)
       )
     from public.students s

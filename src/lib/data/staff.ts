@@ -3,7 +3,7 @@ import "server-only";
 import { createClient } from "@/lib/supabase/server";
 import { fiscalYearEnd, fiscalYearOf, fiscalYearStart, todayISO, daysInMonth } from "@/lib/fiscal-year";
 import { parseSnapshot, type ReportSnapshot } from "@/lib/reports";
-import type { GoalAchievement, GoalDefinition, Profile, RecurrenceRule, Student } from "@/lib/supabase/database.types";
+import type { CustomGoal, GoalAchievement, GoalDefinition, Profile, RecurrenceRule, Student } from "@/lib/supabase/database.types";
 import type { HoursSession } from "@/lib/hours";
 
 export type StaffStudent = Pick<
@@ -135,6 +135,7 @@ export type StaffStudentRecord = {
   /** Every weekly schedule the student has had, for the form's Day(s). */
   rules: Pick<RecurrenceRule, "weekday" | "start_date" | "end_date">[];
   liveGoals: Pick<GoalAchievement, "goal_id" | "attained" | "attained_on" | "other_text">[];
+  liveCustomGoals: Pick<CustomGoal, "id" | "label" | "attained" | "attained_on">[];
   definitions: GoalDefinition[];
 };
 
@@ -148,7 +149,7 @@ export async function getStaffStudentRecord(studentId: string, requestedFiscalYe
   if (studentError) throw new Error(studentError.message);
   if (!student) return null;
 
-  const [tutorRes, reportsRes, allReportsRes, sessionsRes, goalsRes, definitionsRes, earliestRes, rulesRes] = await Promise.all([
+  const [tutorRes, reportsRes, allReportsRes, sessionsRes, goalsRes, definitionsRes, earliestRes, rulesRes, customGoalsRes] = await Promise.all([
     supabase.from("profiles").select("id, full_name").eq("id", student.tutor_id).maybeSingle(),
     supabase
       .from("monthly_reports")
@@ -168,8 +169,9 @@ export async function getStaffStudentRecord(studentId: string, requestedFiscalYe
     supabase.from("goal_definitions").select("*").order("category").order("number"),
     supabase.from("sessions").select("session_date").eq("student_id", studentId).order("session_date").limit(1).maybeSingle(),
     supabase.from("recurrence_rules").select("weekday, start_date, end_date").eq("student_id", studentId),
+    supabase.from("custom_goals").select("id, label, attained, attained_on").eq("student_id", studentId).order("sort_order").order("created_at"),
   ]);
-  for (const r of [tutorRes, reportsRes, allReportsRes, sessionsRes, goalsRes, definitionsRes, earliestRes, rulesRes]) {
+  for (const r of [tutorRes, reportsRes, allReportsRes, sessionsRes, goalsRes, definitionsRes, earliestRes, rulesRes, customGoalsRes]) {
     if (r.error) throw new Error(r.error.message);
   }
 
@@ -190,6 +192,7 @@ export async function getStaffStudentRecord(studentId: string, requestedFiscalYe
     liveSessions: (sessionsRes.data ?? []).map((s) => ({ ...s, hours: Number(s.hours) })),
     rules: rulesRes.data ?? [],
     liveGoals: goalsRes.data ?? [],
+    liveCustomGoals: customGoalsRes.data ?? [],
     definitions: definitionsRes.data ?? [],
   };
 }

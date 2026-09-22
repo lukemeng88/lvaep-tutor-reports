@@ -16,6 +16,7 @@ function snapshot(month: number, sessions: ReportSnapshot["sessions"]): ReportSn
     is_stopped: false,
     stopped_reason: null,
     goals: [],
+    custom_goals: [],
   };
 }
 

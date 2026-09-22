@@ -78,6 +78,18 @@ type GoalAchievementRow = {
   updated_at: string;
 };
 
+type CustomGoalRow = {
+  id: string;
+  student_id: string;
+  tutor_id: string;
+  label: string;
+  attained: boolean;
+  attained_on: string | null;
+  sort_order: number;
+  created_at: string;
+  updated_at: string;
+};
+
 type MonthlyReportRow = {
   id: string;
   student_id: string;
@@ -136,6 +148,12 @@ export type Database = {
         Update: Partial<GoalAchievementRow>;
         Relationships: [];
       };
+      custom_goals: {
+        Row: CustomGoalRow;
+        Insert: WithDefaults<CustomGoalRow, "id" | "attained" | "attained_on" | "sort_order" | "created_at" | "updated_at">;
+        Update: Partial<CustomGoalRow>;
+        Relationships: [];
+      };
       monthly_reports: {
         Row: MonthlyReportRow;
         Insert: WithDefaults<MonthlyReportRow, "id" | "submitted_at">;
@@ -191,4 +209,5 @@ export type RecurrenceRule = Tables<"recurrence_rules">;
 export type Session = Tables<"sessions">;
 export type GoalDefinition = Tables<"goal_definitions">;
 export type GoalAchievement = Tables<"goal_achievements">;
+export type CustomGoal = CustomGoalRow;
 export type MonthlyReport = Tables<"monthly_reports">;

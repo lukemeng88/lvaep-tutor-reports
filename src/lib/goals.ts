@@ -11,6 +11,14 @@ export type GoalState = {
   other_text: string | null;
 };
 
+/** A tutor's own goal under E. Other(s), as shown and as stored in snapshots. */
+export type CustomGoalState = {
+  id: string;
+  label: string;
+  attained: boolean;
+  attained_on: string | null;
+};
+
 export type GoalGroup = {
   category: GoalCategory;
   label: string;

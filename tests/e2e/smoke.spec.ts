@@ -264,22 +264,38 @@ test("a tutor records a month, submits it twice, and staff reads the record", as
     await expect(page.locator("dl").filter({ hasText: `Hours in ${monthName}` })).toContainText(fmt(hoursUpToToday));
   });
 
-  await test.step("attains two goals including an Other goal", async () => {
+  await test.step("attains two goals including a custom goal under E. Other(s)", async () => {
     await page.click("button[role=tab]:has-text('Goals')");
     await page.check("#goal-A1");
     await expect(page.locator("#goal-A1-date")).toBeVisible();
-    // Category E is closed until opened.
-    await page.click("button:has-text('E. Other')");
-    await page.check("#goal-E1");
-    await page.fill("#goal-E1-text", "Read a bus schedule");
+    // E. Other(s) is closed until opened; a new row starts in its text field.
+    const other = page.locator("button:has-text('E. Other(s)')");
+    await other.click();
+    await page.click("button:has-text('Add goal')");
+    const description = page.locator("input[aria-label='Goal description']");
+    await expect(description).toBeFocused();
+    await description.fill("Read a bus schedule");
+    await description.press("Tab");
+    await expect(page.locator("[data-custom-goal]:not([data-custom-goal='new'])")).toHaveCount(1);
+    await page.locator("[data-testid=custom-goals] input[aria-label='Attained']").check();
+    await expect(page.locator("[data-testid=custom-goals] input[type=date]")).toBeVisible();
+    await expect(other).toContainText("1 of 1 attained");
+    // An empty row is never saved.
+    await page.click("button:has-text('Add goal')");
+    await expect(page.locator("[data-custom-goal='new']")).toHaveCount(1);
+    // Removing an attained goal asks first; Cancel keeps it.
+    await page.locator("[data-custom-goal]:not([data-custom-goal='new']) button:has-text('Remove')").click();
+    await expect(dialog(page)).toContainText("Remove this goal?");
+    await page.click(`${MODAL} button:has-text('Cancel')`);
     await expect(page.getByText("Saved", { exact: false }).first()).toBeVisible();
     await page.waitForTimeout(1200);
     await page.reload();
     await page.click("button[role=tab]:has-text('Goals')");
     await expect(page.locator("#goal-A1")).toBeChecked();
-    await page.click("button:has-text('E. Other')");
-    await expect(page.locator("#goal-E1")).toBeChecked();
-    await expect(page.locator("#goal-E1-text")).toHaveValue("Read a bus schedule");
+    await page.click("button:has-text('E. Other(s)')");
+    await expect(page.locator("input[aria-label='Goal description']")).toHaveCount(1);
+    await expect(page.locator("input[aria-label='Goal description']")).toHaveValue("Read a bus schedule");
+    await expect(page.locator("[data-testid=custom-goals] input[aria-label='Attained']")).toBeChecked();
   });
 
   await test.step("the home card and the hours page agree on the totals", async () => {
@@ -372,6 +388,10 @@ test("a tutor records a month, submits it twice, and staff reads the record", as
     // Day(s) and Time(s) come from the schedule and the sessions.
     const form = page.locator("#record-form");
     await expect(form).toContainText("10:00 am to");
+    // The custom goal is listed under E. Other(s) with its check.
+    const other = page.getByTestId("other-goals");
+    await expect(other).toContainText("1. Read a bus schedule");
+    await expect(other.locator("[aria-label='Attained']")).toHaveCount(1);
   });
 
   await test.step("submission history lists both versions and shows version 1 on request", async () => {
@@ -430,4 +450,8 @@ test("a second tutor cannot see the first tutor's students through the API", asy
   const sessions = await supabase.from("sessions").select("id");
   expect(sessions.error).toBeNull();
   expect(sessions.data).toEqual([]);
+
+  const customGoals = await supabase.from("custom_goals").select("id");
+  expect(customGoals.error).toBeNull();
+  expect(customGoals.data).toEqual([]);
 });

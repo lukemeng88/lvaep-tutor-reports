@@ -7,7 +7,7 @@ import { GoalsTab } from "@/components/goals/goals-tab";
 import { CalendarTab } from "@/components/calendar/calendar-tab";
 import { requireTutor } from "@/lib/auth/session";
 import { getStudentForTutor } from "@/lib/data/students";
-import { getGoalAchievements, getGoalDefinitions } from "@/lib/data/goals";
+import { getCustomGoals, getGoalAchievements, getGoalDefinitions } from "@/lib/data/goals";
 import { groupGoals, toGoalStates } from "@/lib/goals";
 import { getStudentSessions } from "@/lib/data/sessions";
 import { todayISO } from "@/lib/fiscal-year";
@@ -27,9 +27,10 @@ export default async function StudentPage({ params }: { params: Promise<Params> 
   const student = await getStudentForTutor(user.id, id);
   if (!student) notFound();
 
-  const [definitions, achievements, sessions] = await Promise.all([
+  const [definitions, achievements, customGoals, sessions] = await Promise.all([
     getGoalDefinitions(),
     getGoalAchievements(student.id),
+    getCustomGoals(student.id),
     getStudentSessions(student.id),
   ]);
 
@@ -44,6 +45,7 @@ export default async function StudentPage({ params }: { params: Promise<Params> 
             studentId={student.id}
             groups={groupGoals(definitions)}
             initialStates={toGoalStates(definitions, achievements)}
+            initialCustomGoals={customGoals.map((g) => ({ id: g.id, label: g.label, attained: g.attained, attained_on: g.attained_on }))}
           />
         }
       />

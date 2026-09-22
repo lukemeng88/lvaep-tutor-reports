@@ -32,7 +32,7 @@ export async function getTutorHomeData(tutorId: string): Promise<TutorHomeData> 
   const fiscalYear = fiscalYearOf(today);
   const [year, month] = today.split("-").map(Number);
 
-  const [studentsRes, sessionsRes, goalsRes] = await Promise.all([
+  const [studentsRes, sessionsRes, goalsRes, customGoalsRes] = await Promise.all([
     supabase.from("students").select("*").eq("tutor_id", tutorId).order("full_name"),
     supabase
       .from("sessions")
@@ -43,16 +43,19 @@ export async function getTutorHomeData(tutorId: string): Promise<TutorHomeData> 
       .select("student_id")
       .eq("tutor_id", tutorId)
       .eq("attained", true),
+    supabase.from("custom_goals").select("student_id").eq("tutor_id", tutorId).eq("attained", true),
   ]);
 
   if (studentsRes.error) throw new Error(studentsRes.error.message);
   if (sessionsRes.error) throw new Error(sessionsRes.error.message);
   if (goalsRes.error) throw new Error(goalsRes.error.message);
+  if (customGoalsRes.error) throw new Error(customGoalsRes.error.message);
 
   const sessions = sessionsRes.data;
   const pastSessions = upToToday(sessions, today);
+  // Program goals and the tutor's own goals count alike.
   const goalsByStudent = new Map<string, number>();
-  for (const g of goalsRes.data) {
+  for (const g of [...goalsRes.data, ...customGoalsRes.data]) {
     goalsByStudent.set(g.student_id, (goalsByStudent.get(g.student_id) ?? 0) + 1);
   }
 

@@ -90,14 +90,14 @@ Import the repository, add the two `NEXT_PUBLIC_SUPABASE_*` environment variable
 - **Home** (`/home`): total hours card (this month, this fiscal year, all time), active students with hours this month and fiscal year, goals attained and the next session, a greyed out "No longer tutored" section with reasons and a Reactivate action. Add a student (name and site), open a student to edit, submit a report and end tutoring ("No longer tutoring") from each row.
 - **Student detail** (`/students/[id]`): header fields save inline as you type. Two tabs, both auto saving with a small Saved indicator and a revert plus toast on failure.
   - **Tutoring days**: a month calendar scoped to the fiscal year (July to June) with a fiscal year selector for past years. Click an empty day to enter a start and end time in 15 minute steps; the hours are the difference, shown live, and a session can optionally repeat weekly to the end of the fiscal year with the same times. Click a session to change its times, set a code (Tutor absent, Student absent, Holiday) or delete it; sessions that belong to a weekly schedule ask "This day only" or "This and future days". Hours show in blue, TA in orange, SA in yellow, H in gray; today is outlined. Arrow keys move between days and the editor becomes a bottom sheet on phones.
-  - **Goals**: one collapsible section per category with "n of m attained", a checkbox and a date per goal, and a free text field for "Other(s)". Wording and asterisks are copied from the form.
+  - **Goals**: one collapsible section per category with "n of m attained", a checkbox and a date per goal. E. Other(s) is the tutor's own list: Add goal opens a new row with a description, an Attained box with a date once checked, and Remove (which asks first when the goal is attained). Empty rows are never saved. Wording and asterisks are copied from the form.
 - **Hours** (`/hours`): a bar chart of hours per month, a table of hours per student per month and a running total, with a fiscal year selector.
 - **Submit report**: pick a month (each shows "Submitted (vN)" or "Not submitted" and how many days it has), validation lists exactly what is missing with a link to fix it, then a confirmation step. Each submission stores a JSON snapshot with a new version number. Live data stays editable.
 
 ### Staff
 
 - **Staff home** (`/staff`): submitted reports this month, a "missing reports" list for last month (active students who had sessions but no submission), a searchable tutor list with active student counts, and the selected tutor's students (stopped ones greyed). On narrow screens this becomes a drill down.
-- **Student record** (`/staff/students/[id]`): the full year form laid out like the paper original. Each month of the 31 by 12 grid comes from that month's latest submitted snapshot; months without a submission show a "Not submitted" mark in the column header. Column totals, a grand total, STOPPED status and reason, every goal with check marks and attained dates, the contact block and the footer note. Actions: Print / Save as PDF (one letter page, portrait, no navigation), Download CSV of the year's sessions, a submission history panel where any older version can be viewed, and a Live view toggle that shows current unsubmitted data, clearly labeled.
+- **Student record** (`/staff/students/[id]`): the full year form laid out like the paper original. Each month of the 31 by 12 grid comes from that month's latest submitted snapshot; months without a submission show a "Not submitted" mark in the column header. Column totals, a grand total, STOPPED status and reason, every goal with check marks and attained dates, the tutor's own goals one per line under E. Other(s), the contact block and the footer note. Actions: Print / Save as PDF (one letter page, portrait, no navigation), Download CSV of the year's sessions, a submission history panel where any older version can be viewed, and a Live view toggle that shows current unsubmitted data, clearly labeled.
 
 ## Architecture
 
@@ -129,7 +129,7 @@ src/
     reports.ts         report validation, snapshot building, snapshot parsing
     record.ts          assembling the staff year grid and CSV from snapshots or live sessions
 supabase/
-  migrations/          schema, RLS, goal definitions, staff read only fix, session functions
+  migrations/          schema, RLS, goal definitions, staff read only fix, session functions, session times, custom goals
   seed.sql             demo accounts and data
   config.toml          minimal CLI config (auth settings only)
 tests/
@@ -150,6 +150,7 @@ erDiagram
   recurrence_rules o|--o{ sessions : "recurrence_rule_id"
   students ||--o{ goal_achievements : "student_id"
   goal_definitions ||--o{ goal_achievements : "goal_id"
+  students ||--o{ custom_goals : "student_id"
   students ||--o{ monthly_reports : "student_id"
 
   profiles {
@@ -187,7 +188,7 @@ erDiagram
     uuid recurrence_rule_id FK
   }
   goal_definitions {
-    text id PK "A1 .. E1"
+    text id PK "A1 .. D4"
     text category
     text label
     bool starred
@@ -197,7 +198,13 @@ erDiagram
     text goal_id FK
     bool attained
     date attained_on
-    text other_text
+  }
+  custom_goals {
+    uuid id PK
+    text label
+    bool attained
+    date attained_on
+    int sort_order
   }
   monthly_reports {
     uuid id PK
@@ -214,7 +221,7 @@ Key constraints: `sessions` is unique per `(student_id, session_date)`, `hours` 
 ### Row Level Security
 
 - `is_staff()` and `is_tutor()` are security definer helpers that read `profiles.role` for the signed in user.
-- Tutors can select, insert, update and delete rows where `tutor_id = auth.uid()` in `students`, `recurrence_rules`, `sessions`, `goal_achievements` and `monthly_reports`. Child rows also require `owns_student(student_id)`, so a tutor cannot attach data to another tutor's student.
+- Tutors can select, insert, update and delete rows where `tutor_id = auth.uid()` in `students`, `recurrence_rules`, `sessions`, `goal_achievements`, `custom_goals` and `monthly_reports`. Child rows also require `owns_student(student_id)`, so a tutor cannot attach data to another tutor's student.
 - Staff can select every row in those tables and cannot write any of them. Write policies require the tutor role, so a staff account cannot create rows under its own id either.
 - `profiles`: users read their own row, staff read all, users can update their own name but not their role. Profile rows are created only by the trigger on `auth.users`.
 - `goal_definitions` is readable by anyone signed in.

@@ -66,6 +66,10 @@ describe("buildSnapshot", () => {
       { session_date: "2027-02-01", hours: 3, code: null, start_time: "09:00:00", end_time: "12:00:00" },
     ],
     goals: [{ goal_id: "A1", attained: true, attained_on: "2027-01-10", other_text: null }],
+    customGoals: [
+      { id: "cg1", label: "Read a bus schedule", attained: true, attained_on: "2027-01-12" },
+      { id: "cg2", label: "Open a bank account", attained: false, attained_on: null },
+    ],
   };
 
   it("keeps only the month's sessions, in date order, and totals hours with codes as 0", () => {
@@ -79,6 +83,10 @@ describe("buildSnapshot", () => {
     expect(snapshot.fiscal_year).toBe(2026);
     expect(snapshot.month).toBe(1);
     expect(snapshot.goals).toEqual(input.goals);
+    expect(snapshot.custom_goals).toEqual([
+      { label: "Read a bus schedule", attained: true, attained_on: "2027-01-12" },
+      { label: "Open a bank account", attained: false, attained_on: null },
+    ]);
   });
 
   it("round-trips through parseSnapshot", () => {
@@ -96,9 +104,20 @@ describe("buildSnapshot", () => {
       sessions: [{ date: "2027-01-04", hours: 1.5, code: null }],
     };
     const parsed = parseSnapshot(legacy);
+    expect(parsed?.custom_goals).toEqual([]);
     expect(parsed?.days).toBe("Mon");
     expect(parsed?.times).toBe("10 to 11");
     expect(parsed?.sessions[0]).toEqual({ date: "2027-01-04", hours: 1.5, code: null, start_time: null, end_time: null });
+  });
+
+  it("turns the old Other(s) row of an older snapshot into a custom goal", () => {
+    const parsed = parseSnapshot({
+      student_name: "Rosa",
+      month: 2,
+      sessions: [],
+      goals: [{ goal_id: "E1", attained: true, attained_on: "2027-02-01", other_text: "Passed the written test" }],
+    });
+    expect(parsed?.custom_goals).toEqual([{ label: "Passed the written test", attained: true, attained_on: "2027-02-01" }]);
   });
 });
 

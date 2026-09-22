@@ -181,9 +181,10 @@ export async function submitReport(input: SubmitReportInput): Promise<ActionResu
   if (issues.length > 0) return fail(issues[0].message);
 
   const supabase = await createClient();
-  const [definitionsRes, achievementsRes, latestRes] = await Promise.all([
+  const [definitionsRes, achievementsRes, customGoalsRes, latestRes] = await Promise.all([
     supabase.from("goal_definitions").select("*").order("category").order("number"),
     supabase.from("goal_achievements").select("goal_id, attained, attained_on, other_text").eq("student_id", studentId),
+    supabase.from("custom_goals").select("id, label, attained, attained_on").eq("student_id", studentId).order("sort_order").order("created_at"),
     supabase
       .from("monthly_reports")
       .select("version")
@@ -194,7 +195,7 @@ export async function submitReport(input: SubmitReportInput): Promise<ActionResu
       .limit(1)
       .maybeSingle(),
   ]);
-  if (definitionsRes.error || achievementsRes.error || latestRes.error) {
+  if (definitionsRes.error || achievementsRes.error || customGoalsRes.error || latestRes.error) {
     return fail("We could not prepare the report. Please try again.");
   }
 
@@ -207,6 +208,7 @@ export async function submitReport(input: SubmitReportInput): Promise<ActionResu
     month,
     sessions: loaded.monthSessions,
     goals: toGoalStates(definitionsRes.data, achievementsRes.data),
+    customGoals: customGoalsRes.data,
   });
 
   // Retry once if another submission landed between reading and writing.

@@ -1,0 +1,13 @@
+# Supabase CLI config. Kept minimal on purpose: `supabase config push` only
+# writes the properties declared here, so this file changes nothing else on
+# the hosted project. Local `supabase start` uses the CLI defaults for the rest.
+project_id = "lvaep-tutor-reports"
+
+[auth]
+site_url = "http://localhost:3000"
+additional_redirect_urls = ["http://localhost:3000/**"]
+
+[auth.email]
+# Email + password only. Confirmation is off so demo accounts can sign in immediately.
+enable_signup = true
+enable_confirmations = false
